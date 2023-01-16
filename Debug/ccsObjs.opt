@@ -1,1 +1,9 @@
-"./CircularQueue.obj" "./adc.obj" "./main.obj" "./uart.obj" "../lnk_msp430fr5994.cmd" -llibmpu_init.a -llibmath.a -llibc.a 
+"./CircularQueue.obj"
+"./adc.obj"
+"./main.obj"
+"./uart.obj"
+"./Driver/source/LNJT103F_NTC.obj"
+"../lnk_msp430fr5994.cmd"
+-llibmpu_init.a
+-llibmath.a
+-llibc.a

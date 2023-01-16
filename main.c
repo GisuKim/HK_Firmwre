@@ -63,11 +63,13 @@
 #include <stdlib.h>
 //#include <time.h>
 #include <math.h>
+#include "Driver/include/LNJT103F_NTC.h"
 
 #define OFFSETVOLTAGE 0.1
 #define MSP_CPU_CLK 4000000
 
 //---------------------- PID Command ---------------------------
+
 
 // sample Tuning base 1
 //float Kp_Value[4] = {2.5, 2.5, 2.5, 2.5};
@@ -550,7 +552,7 @@ int main(void)
 
         if(SampleComplete)
         {
-            for(k =0; k<3; k++){
+            for(k =0; k<4; k++){
                 //voltageArray[k] = ((ADC_Sample[k])/4095.0) * 3.3;
                 //voltageArray[k] = (0.00805)*ADC_Sample[k];
                 ADC_Chenck[k] = ADC_Sample[k];
@@ -614,14 +616,14 @@ int main(void)
             }
             //TempVal[0] = ((voltageArray[0] + OFFSETVOLTAGE) / 0.06000) + 20.00;
 
-            ADC_Chenck[3] = ADC_Sample[3];
+//            ADC_Chenck[3] = ADC_Sample[3];
 
 
             //filteringValue[3] = filteringValue[3] * (1 - sensitivity) + (ADC_Sample[3] * sensitivity);
-            roller_voltage = (0.000806)*ADC_Sample[3];
+//            roller_voltage = (0.000806)*ADC_Sample[3];
             //roller_voltage = (0.000806)*filteringValue[3];
 
-            TempVal[3] = ((roller_voltage - 0.0) / 0.0440) + 0.00;
+//            TempVal[3] = ((roller_voltage - 0.0) / 0.0440) + 0.00;
 
 
             // modified offset
@@ -2006,8 +2008,8 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
         ADC_Result[0] = AnalogRead(ADC12INCH_12);
         ADC_Result[1] = AnalogRead(ADC12INCH_13);
         ADC_Result[2] = AnalogRead(ADC12INCH_14);
-        //ADC_Result[3] = AnalogRead(ADC12INCH_15);
-        ADC_Result[3] = AnalogRead(ADC12INCH_8);
+        ADC_Result[3] = AnalogRead(ADC12INCH_15);
+        ADC_Result[4] = AnalogRead(ADC12INCH_8);
 
         // skip average
 
