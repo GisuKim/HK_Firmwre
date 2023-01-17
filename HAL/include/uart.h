@@ -9,7 +9,7 @@
 #define UART_H_
 
 #include <msp430.h>
-#include "CircularQueue.h"
+#include "UTIL/include/CircularQueue.h"
 #include <stdio.h>
 #include <string.h>
 

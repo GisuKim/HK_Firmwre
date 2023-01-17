@@ -10,7 +10,7 @@
 #ifndef ADC_C_
 #define ADC_C_
 
-#include "adc.h"
+#include "HAL/include/adc.h"
 
 void Init_ADC_GPIO(void)
 {

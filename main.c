@@ -52,7 +52,10 @@
 //-------------------------------------------------------------------
 
 #include <msp430.h>
-#include "uart.h"
+#include "HAL/include/uart.h"
+#include "HAL/include/adc.h"
+#include "HAL/include/pwm.h"
+#include "HAL/include/i2c.h"
 //#include "driverlib.h"
 /////// we will use FRAM CTRL
 
@@ -71,36 +74,6 @@
 //---------------------- PID Command ---------------------------
 
 
-// sample Tuning base 1
-//float Kp_Value[4] = {2.5, 2.5, 2.5, 2.5};
-//float Ki_Value[4] = {0.015, 0.015, 0.015, 0.015};
-//float Kd_Value[4] = {0, 0, 0, 0};
-
-// sample Tuning base 2
-//float Kp_Value[4] = {0.0015, 2.4, 2.4 , 2.4};
-//float Ki_Value[4] = {0.0085, 0.018, 0.018, 0.018};
-//float Kd_Value[4] = {0.004, 0.01, 0.01, 0.01};
-
-//float Kp_Value[4] = {0.0015, 0.0105, 0.0105, 0.0105};
-//float Ki_Value[4] = {0.0085, 0.0085, 0.0085, 0.0085};
-//float Kd_Value[4] = {0.004, 0.004, 0.004, 0.004};
-
-
-// 다리 쪽 PID 값 조정 필요 1의 단위로 P값 조정
-//float Kp_Value[4] = {0.0015, 0.0525, 3.0, 0.0525};
-//float Ki_Value[4] = {0.0085, 0.0170, 0.0, 0.0310};
-//float Kd_Value[4] = {0.004, 0.012, 0.0, 0.016};
-//float Kp_Value[4] = {3.0, 3.0, 1.8, 3.0};
-//float Ki_Value[4] = {0.0, 0.0, 0.6, 0.0};
-//float Kd_Value[4] = {0.0, 0.0, 3.75, 0.0};
-
-//float Kp_Value[4] = {1.8, 1.8, 1.8, 1.8};
-//float Ki_Value[4] = {0.6, 0.6, 0.6, 0.6};
-//float Kd_Value[4] = {3.75, 3.75, 3.75, 3.75};
-
-//float Kp_Value[4] = {1.8, 1.75, 1.65, 1.75};
-//float Ki_Value[4] = {0.6, 0.5, 0.55, 0.5};
-//float Kd_Value[4] = {3.75, 3.65, 3.55, 3.65};
 
 float Kp_Value[4] = {1.8, 1.75, 1.65, 1.75};
 float Ki_Value[4] = {0.6, 0.5, 0.55, 0.5};
@@ -216,19 +189,19 @@ unsigned char DP_TransmitStart = 0;
 //////////////////////////       ADC       //////////////////////////
 
 float voltageArray[4];
-float TempVal[4];
+float TempVal[8];
 float PreTempVal[4] = {100, 100, 100, 100};
 
 float TempI2C = 45.2;          // ���� ���ؼ� �ӽ� �µ� ����
 
 
-unsigned int ADC_Result[4];
+unsigned int ADC_Result[8];
 volatile int ADC_CalcurationFlag;
 //unsigned int ADC_Result[9];
 //unsigned int ADC_Result;
 //float ;
 float ADC_Sample[4];
-volatile unsigned int ADC_Temp[4][5];
+volatile unsigned int ADC_Temp[8];
 unsigned char SaveOnOffState = 0x00;
 
 
@@ -273,8 +246,6 @@ int timeSamplingCount;
 int timeCount_PID;
 int monitoringTime;
 
-
-int testFlag;
 extern unsigned char CheckBreak;
 
 //------------------------------- TB I2C -----------------------------------------------------------
@@ -325,28 +296,7 @@ uint8_t CalPEC(uint8_t *crc, uint8_t nBytes);  // PEC ����
 
 
 
-void i2cInit(void){
-    P7SEL1 &= ~BIT1;    // SCL
-    P7SEL0 |= BIT1;
 
-    P7SEL1 &= ~BIT0;    // SDA
-    P7SEL0 |= BIT0;
-
-    UCB2CTLW0 |= UCSWRST;   // Enters reset state, USCI stops operation
-
-    //UCB2TBCNT = UCTBCNT3;   // Expecting to receive 3 bytes of data
-    UCB2CTLW1 |= UCASTP_2;  // Sends stop bit when UCTBCNT is reached
-
-    UCB2CTLW0 |= UCMST      // Master Mode
-              |  UCMODE_3   // I2C Mode
-              |  UCSSEL_3;  // Sets SMCLK as source
-    UCB2BRW    = 0x0028;    // SMCLK/10
-
-    UCB2CTLW0 &= ~UCSWRST;  // Exits reset mode, USCI enters operation
-    UCB2IE    |= UCTXIE0    // Data received interrupt enable
-              |  UCRXIE0    // Data ready to transmit interrupt enable
-              |  UCNACKIE;  // NACK interrupt enable
-}
 
 void getData(void){
 
@@ -443,7 +393,7 @@ int pwmResult;
 
 int main(void)
 {
-    int k = 0;
+    int i, k = 0;
     //int adc_index = 0;
     Init_ADC_GPIO();
     Init_PWM_GPIO();
@@ -529,107 +479,21 @@ int main(void)
 
         if(ADC_CalcurationFlag == 1)
         {
-            ADC_Temp[0][sample_index] = ADC_Result[0];
-            ADC_Temp[1][sample_index] = ADC_Result[1];
-            ADC_Temp[2][sample_index] = ADC_Result[2];
-            ADC_Temp[3][sample_index] = ADC_Result[3];
 
             sample_index++;
 
             if(sample_index == 5)
             {
-                ADC_Sample[0] = (float)((ADC_Temp[0][0] + ADC_Temp[0][1] + ADC_Temp[0][2] + ADC_Temp[0][3] + ADC_Temp[0][4])/5);
-                ADC_Sample[1] = (float)((ADC_Temp[1][0] + ADC_Temp[1][1] + ADC_Temp[1][2] + ADC_Temp[1][3] + ADC_Temp[1][4])/5);
-                ADC_Sample[2] = (float)((ADC_Temp[2][0] + ADC_Temp[2][1] + ADC_Temp[2][2] + ADC_Temp[2][3] + ADC_Temp[2][4])/5);
-                ADC_Sample[3] = (float)((ADC_Temp[3][0] + ADC_Temp[3][1] + ADC_Temp[3][2] + ADC_Temp[3][3] + ADC_Temp[3][4])/5);
+                for(i=0;i<8;i++){
 
+                    TempVal[i] = temp_Calculator(ADC_Result[i] /= 5);
+                    TempVal[i] = 100 - TempVal[i];
+                    ADC_Result[i] = 0;
+                }
                 sample_index = 0;
-                SampleComplete = 1;
             }
 
             ADC_CalcurationFlag = 0;
-        }
-
-        if(SampleComplete)
-        {
-            for(k =0; k<4; k++){
-                //voltageArray[k] = ((ADC_Sample[k])/4095.0) * 3.3;
-                //voltageArray[k] = (0.00805)*ADC_Sample[k];
-                ADC_Chenck[k] = ADC_Sample[k];
-
-                //filteringValue[k] = filteringValue[k] * (1 - sensitivity) + (ADC_Sample[k] * sensitivity);
-
-                //voltageArray[k] = (0.000636)*ADC_Sample[k];
-
-                //voltageArray[k] = (0.00033*ADC_Sample[k])+0.75;
-
-                //voltage_check[k] = (0.00033*ADC_Sample[k])+0.75;
-
-
-                voltageArray[k] = (0.000806)*ADC_Sample[k];
-                //voltageArray[k] = (0.000806)*filteringValue[k];
-
-                //voltageArray[k] = (0.000519)*voltageArray[k];
-
-                //Temp = ( Vin + 0.00 ) / 0.04400 + 0.00
-
-                // example 1)
-                //voltageArray[k] = (0.000512)*ADC_Sample[k];
-
-
-                // Resistor Change : 2.4K -> 2.5K
-                //TempVal[k] = ((-3.0257)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (33.586*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-146.22)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (317.92*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-365.75)*voltageArray[k]*voltageArray[k]) +
-                //                                (244.58 * voltageArray[k]) -57.066;
-
-                //TempVal[k] = ((-36.606)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (268.19*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                               ((-770.59)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (1105.8*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-839.64)*voltageArray[k]*voltageArray[k]) +
-                //                                (370.58 * voltageArray[k]) -57.066;
-
-                //TempVal[k] = (voltageArray[k] + 0.05)/0.04923 - 0.00;
-
-                //voltageArray[k] = ((ADC_Sample[k])/4095.0) * 3.3;
-                //voltageArray[k] = ((ADC_Sample[k])/65);
-                // Resistor Change : 2.4K -> 2.5K
-                //TempVal[k] = ((-3.0257)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (33.586*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-146.22)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (317.92*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-365.75)*voltageArray[k]*voltageArray[k]) +
-                //                                (244.58 * voltageArray[k]) -57.066;
-
-                //TempVal[k] = ((voltageArray[k] - OFFSETVOLTAGE) / 0.05000) + 0.00;
-                //TempVal[k] = ((voltageArray[k] - OFFSETVOLTAGE) / 0.06000) + 20.00;
-                TempVal[k] = ((voltageArray[k] + OFFSETVOLTAGE) / 0.06000) + 20.00;
-
-                //TempVal[k] = ( voltageArray[k] + 0 ) / 0.01354 - 90;
-
-                //TempVal[k] = ((voltageArray[k] - 1.19) / 0.01417) + 0.00;
-
-                //TempVal[k] = (0.01586)*ADC_Sample[k];
-            }
-            //TempVal[0] = ((voltageArray[0] + OFFSETVOLTAGE) / 0.06000) + 20.00;
-
-//            ADC_Chenck[3] = ADC_Sample[3];
-
-
-            //filteringValue[3] = filteringValue[3] * (1 - sensitivity) + (ADC_Sample[3] * sensitivity);
-//            roller_voltage = (0.000806)*ADC_Sample[3];
-            //roller_voltage = (0.000806)*filteringValue[3];
-
-//            TempVal[3] = ((roller_voltage - 0.0) / 0.0440) + 0.00;
-
-
-            // modified offset
-            //TempVal[3] = ((roller_voltage - 1.26) / 0.0440) - 5.00;
-
-            SampleComplete = 0;
         }
 
         // 1. recognize connection status and mode setting
@@ -659,6 +523,7 @@ int main(void)
                 }
             }
         }
+
         /*
         if(AT_NORMAL_FLAG == 1 || AT_START_FLAG == 1)
         {
@@ -1454,23 +1319,7 @@ void Init_TIMER_A0(void)
     TA0CCTL0 = CCIE;                          // TACCR0 interrupt enabled
 }
 
-void Init_PWM_GPIO(void)
-{
-    // Configure GPIO
-    //TimerB PWM GPIO
-    //P3DIR |= BIT4 | BIT5 | BIT6 | BIT7 ;                   // P3.4, P3.5, P3.6 and P3.7 output
-    //P3SEL0 |= BIT4 | BIT5 | BIT6 | BIT7 ;  f                // P3.4, P3.5, P3.6 and P3.7 options select
-    //P3SEL1 &= ~(BIT4 | BIT5 | BIT6 | BIT7);
 
-    P3DIR |= BIT4 | BIT5 | BIT6 | BIT7;                   // P3.4, P3.5 and P3.6 output
-    P3SEL0 |= BIT4 | BIT5 | BIT6 | BIT7;                  // P3.4, P3.5 and P3.6 options select
-    P3SEL1 &= ~(BIT4 | BIT5 | BIT6 | BIT7);
-
-    P1DIR |= BIT4;                                  // P1.4 Channel 5
-    P1SEL0 |= BIT4;                                 // P1.4 options select
-    P1SEL1 &= ~(BIT4);
-
-}
 
 void Init_SMCLK_16MHZ(void)
 {
@@ -1983,7 +1832,7 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
 #error Compiler not supported!
 #endif
 {
-
+    int i = 0;
     //static int timeCount_PID = 0;
     //static int timeSamplingCount = 0;
     //static int timeSendMessage = 0;
@@ -1998,32 +1847,24 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
 
     if(timeSamplingCount >= 10)         // 0.02sec       51ms
     {
-        //P4OUT ^= BIT3;
+        // P4OUT ^= BIT3;
         // ADC value
-        //Sampling until 0.1sec
+        // Sampling until 0.1sec
         // ADC sampling
         // 1 channel
 
-        // multi 4 channel
-        ADC_Result[0] = AnalogRead(ADC12INCH_12);
-        ADC_Result[1] = AnalogRead(ADC12INCH_13);
-        ADC_Result[2] = AnalogRead(ADC12INCH_14);
-        ADC_Result[3] = AnalogRead(ADC12INCH_15);
-        ADC_Result[4] = AnalogRead(ADC12INCH_8);
-
-        // skip average
-
-        // use one adc channel in roller
-
-        //ADC_Result[0] = AnalogRead(ADC12INCH_8);
-        //ADC_Result[1] = AnalogRead(ADC12INCH_9);
-        //ADC_Result[2] = AnalogRead(ADC12INCH_10);
-        //ADC_Result[3] = AnalogRead(ADC12INCH_11);
-
+        // adc 8 ch
+        ADC_Result[0] += AnalogRead(ADC12INCH_12);
+        ADC_Result[1] += AnalogRead(ADC12INCH_13);
+        ADC_Result[2] += AnalogRead(ADC12INCH_14);
+        ADC_Result[3] += AnalogRead(ADC12INCH_15);
+        ADC_Result[4] += AnalogRead(ADC12INCH_8);
+        ADC_Result[5] += AnalogRead(ADC12INCH_9);
+        ADC_Result[6] += AnalogRead(ADC12INCH_10);
+        ADC_Result[7] += AnalogRead(ADC12INCH_11);
 
 
        //__bic_SR_register_on_exit(LPM0_bits);
-        testFlag = 1;
         ADC_CalcurationFlag = 1;
         timeSamplingCount = 0;
     }

@@ -9,7 +9,7 @@
 #ifndef UART_C_
 #define UART_C_
 
-#include "uart.h"
+#include "HAL/include/uart.h"
 
 int BufferCount;
 int BufferCount2;

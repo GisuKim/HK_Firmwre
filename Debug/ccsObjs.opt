@@ -1,8 +1,10 @@
-"./CircularQueue.obj"
-"./adc.obj"
 "./main.obj"
-"./uart.obj"
 "./Driver/source/LNJT103F_NTC.obj"
+"./HAL/source/adc.obj"
+"./HAL/source/i2c.obj"
+"./HAL/source/pwm.obj"
+"./HAL/source/uart.obj"
+"./UTIL/source/CircularQueue.obj"
 "../lnk_msp430fr5994.cmd"
 -llibmpu_init.a
 -llibmath.a

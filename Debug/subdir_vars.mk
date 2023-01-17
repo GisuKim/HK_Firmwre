@@ -9,39 +9,21 @@ CMD_SRCS += \
 ../lnk_msp430fr5994.cmd 
 
 C_SRCS += \
-../CircularQueue.c \
-../adc.c \
-../main.c \
-../uart.c 
+../main.c 
 
 C_DEPS += \
-./CircularQueue.d \
-./adc.d \
-./main.d \
-./uart.d 
+./main.d 
 
 OBJS += \
-./CircularQueue.obj \
-./adc.obj \
-./main.obj \
-./uart.obj 
+./main.obj 
 
 OBJS__QUOTED += \
-"CircularQueue.obj" \
-"adc.obj" \
-"main.obj" \
-"uart.obj" 
+"main.obj" 
 
 C_DEPS__QUOTED += \
-"CircularQueue.d" \
-"adc.d" \
-"main.d" \
-"uart.d" 
+"main.d" 
 
 C_SRCS__QUOTED += \
-"../CircularQueue.c" \
-"../adc.c" \
-"../main.c" \
-"../uart.c" 
+"../main.c" 
 
 

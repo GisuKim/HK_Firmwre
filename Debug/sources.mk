@@ -113,4 +113,6 @@ PDE_DEPS__QUOTED :=
 SUBDIRS := \
 . \
 Driver/source \
+HAL/source \
+UTIL/source \
 

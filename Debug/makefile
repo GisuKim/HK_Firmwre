@@ -10,11 +10,13 @@ GEN_OPTS__FLAG :=
 GEN_CMDS__FLAG := 
 
 ORDERED_OBJS += \
-"./CircularQueue.obj" \
-"./adc.obj" \
 "./main.obj" \
-"./uart.obj" \
 "./Driver/source/LNJT103F_NTC.obj" \
+"./HAL/source/adc.obj" \
+"./HAL/source/i2c.obj" \
+"./HAL/source/pwm.obj" \
+"./HAL/source/uart.obj" \
+"./UTIL/source/CircularQueue.obj" \
 "../lnk_msp430fr5994.cmd" \
 $(GEN_CMDS__FLAG) \
 -llibmpu_init.a \
@@ -30,8 +32,12 @@ RMDIR := RMDIR /S/Q
 -include sources.mk
 -include subdir_vars.mk
 -include Driver/source/subdir_vars.mk
+-include HAL/source/subdir_vars.mk
+-include UTIL/source/subdir_vars.mk
 -include subdir_rules.mk
 -include Driver/source/subdir_rules.mk
+-include HAL/source/subdir_rules.mk
+-include UTIL/source/subdir_rules.mk
 -include objects.mk
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -162,8 +168,8 @@ HBC_Proto_V7.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "CircularQueue.obj" "adc.obj" "main.obj" "uart.obj" "Driver\source\LNJT103F_NTC.obj" 
-	-$(RM) "CircularQueue.d" "adc.d" "main.d" "uart.d" "Driver\source\LNJT103F_NTC.d" 
+	-$(RM) "main.obj" "Driver\source\LNJT103F_NTC.obj" "HAL\source\adc.obj" "HAL\source\i2c.obj" "HAL\source\pwm.obj" "HAL\source\uart.obj" "UTIL\source\CircularQueue.obj" 
+	-$(RM) "main.d" "Driver\source\LNJT103F_NTC.d" "HAL\source\adc.d" "HAL\source\i2c.d" "HAL\source\pwm.d" "HAL\source\uart.d" "UTIL\source\CircularQueue.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 
