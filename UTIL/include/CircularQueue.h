@@ -11,9 +11,15 @@
 #define TRUE 1
 #define FALSE 0
 
+typedef struct rxData
+{
+    char mode;
+    char data[9];
+} rxDataPc;
 
-#define QUE_LEN 11                  // Packet byte (data length)
-typedef unsigned char Data;
+#define QUE_LEN 50                // Packet byte (data length)
+
+typedef rxDataPc Data;
 
 typedef struct _cQueue
 {

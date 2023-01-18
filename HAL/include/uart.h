@@ -17,7 +17,7 @@ unsigned char RxData;
 unsigned char RxData2;      // Uart2
 
 
-Queue q;
+Queue rxPcDataQueue;
 
 void Init_UART(void);
 void Init_UART2(void);

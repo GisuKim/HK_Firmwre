@@ -12,6 +12,7 @@ GEN_CMDS__FLAG :=
 ORDERED_OBJS += \
 "./main.obj" \
 "./Driver/source/LNJT103F_NTC.obj" \
+"./Driver/source/pc_protocol.obj" \
 "./HAL/source/adc.obj" \
 "./HAL/source/i2c.obj" \
 "./HAL/source/pwm.obj" \
@@ -168,8 +169,8 @@ HBC_Proto_V7.hex: $(EXE_OUTPUTS)
 # Other Targets
 clean:
 	-$(RM) $(BIN_OUTPUTS__QUOTED)$(EXE_OUTPUTS__QUOTED)
-	-$(RM) "main.obj" "Driver\source\LNJT103F_NTC.obj" "HAL\source\adc.obj" "HAL\source\i2c.obj" "HAL\source\pwm.obj" "HAL\source\uart.obj" "UTIL\source\CircularQueue.obj" 
-	-$(RM) "main.d" "Driver\source\LNJT103F_NTC.d" "HAL\source\adc.d" "HAL\source\i2c.d" "HAL\source\pwm.d" "HAL\source\uart.d" "UTIL\source\CircularQueue.d" 
+	-$(RM) "main.obj" "Driver\source\LNJT103F_NTC.obj" "Driver\source\pc_protocol.obj" "HAL\source\adc.obj" "HAL\source\i2c.obj" "HAL\source\pwm.obj" "HAL\source\uart.obj" "UTIL\source\CircularQueue.obj" 
+	-$(RM) "main.d" "Driver\source\LNJT103F_NTC.d" "Driver\source\pc_protocol.d" "HAL\source\adc.d" "HAL\source\i2c.d" "HAL\source\pwm.d" "HAL\source\uart.d" "UTIL\source\CircularQueue.d" 
 	-@echo 'Finished clean'
 	-@echo ' '
 

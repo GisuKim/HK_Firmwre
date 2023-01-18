@@ -224,7 +224,7 @@ void Init_PWM_GPIO(void);
 void Init_SMCLK_16MHZ(void);
 void Init_ADC_GPIO(void);
 void Init_ADC(void);
-
+void processPcCommand(Data command);
 void Init_TIMER_A0(void);
 
 // change parameter and return value as float -> double
@@ -362,8 +362,8 @@ unsigned char __attribute__((persistent)) FRAM_write[WRITE_SIZE] = {0};
 
 extern int BufferCount;
 extern int ShiftCount;
-extern unsigned char BufferChecking[12];
-
+extern unsigned char ucRxBuffer[12];
+extern Queue rxPcDataQueue;
 extern int BufferCount2;
 extern unsigned char BufferChecking2[12];
 //int AT_MODE_FLAG;
@@ -412,7 +412,7 @@ int main(void)
     __delay_cycles(4800000);        // 16MHz / 2 about 0.5sec
     Init_UART();                        // uart.h
     Init_UART2();
-    QueueInit(&q);                     // Queue initialize
+    QueueInit(&rxPcDataQueue);                     // Queue initialize
 
     Init_TIMER_A0();
 
@@ -497,18 +497,12 @@ int main(void)
         }
 
         // 1. recognize connection status and mode setting
-        if(RxData == 0xa5)
+
+        if(QIsEmpty(&rxPcDataQueue) != 1)
         {
-            if(BufferCount >= 12)
-            {
-                // PC command process
-                BufferCount = 0;
-                if(BufferChecking[0] == 0xfd && BufferChecking[11] == 0xa5)
-                {
-                    _commandZone(BufferChecking);
-                }
-            }
+            processPcCommand(Dequeue(&rxPcDataQueue));
         }
+
 
         // 1. 전시기 명령어 처리 구간 / 튜닝 진입시 처리 안함
         if(RxData2 == 0xa5)
@@ -1352,6 +1346,26 @@ void Init_SMCLK_16MHZ(void)
     CSCTL0_H = 0;                            // Lock CS registers                      // Lock CS registers
     /////////////////// SMCLK = 16MHZ ////////////////////////////////
     ////////////////// SMCLK -> 4MHz  ////////////////////////////////
+}
+
+
+void processPcCommand(Data command)
+{
+    switch(command.mode)
+    {
+    case 0x80:  //connect requeast
+        PC_SendMessageFlag = 1;
+        PC_reQuestFlag = 1;
+        MessageTx();    // Feedback Message
+        break;
+    case 0xc0:  //connect Ack Req
+        PC_reQuestFlag = 0;
+        AT_NORMAL_FLAG = 1;
+        break;
+
+
+    }
+
 }
 
 void _commandZone(unsigned char *_newCommand)

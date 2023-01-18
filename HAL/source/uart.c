@@ -11,10 +11,10 @@
 
 #include "HAL/include/uart.h"
 
-int BufferCount;
+unsigned int BufferCount;
 int BufferCount2;
 int ShiftCount;
-unsigned char BufferChecking[11];
+unsigned char ucRxBuffer[20];
 unsigned char BufferChecking2[11];
 unsigned char OverrunChecking;
 unsigned int ByteStatus;
@@ -100,12 +100,16 @@ void Init_UART2(void)
 void UART_TX_DATA(void)
 {
     int i = 0;
-    if(q.state == 1)
+
+    Data temp;
+
+    if(rxPcDataQueue.state == 1)
     {
         UCA3IE &= ~UCRXIE;
         for(i = 0; i<11; i++)
         {
-            fput_data( Dequeue(&q) );
+            temp = Dequeue(&rxPcDataQueue);
+            fput_data( temp.mode );
         }
         UCA3IE |= UCRXIE;
     }
@@ -171,98 +175,32 @@ void __attribute__ ((interrupt(EUSCI_A2_VECTOR))) USCI_A2_ISR (void)
                 UCB2IE   &= ~(UCTXIE0    // Data received interrupt enable
                           |  UCRXIE0    // Data ready to transmit interrupt enable
                           |  UCNACKIE);  // NACK interrupt enable
-                /*
-                if(UCA3STATW & UCOE)
-                 {
-                     //ErrDataCheck = UCA3RXBUF;
-                     orData[orCount++] = UCA3RXBUF;  // detected over run
 
-                     //BufferCount = BufferCount-1;        // Initialize
-                     //BufferChecking[BufferCount] = RxData;
-
-                     if(orCount >= 11)
-                     {
-                         orCount = 0;
-                     }
-                 }
-                else
-                {
-
-                    //if(RxData == 0xfd)
-                    //{
-                    //   BufferCount = 0;
-                    //}
-
-                    RxData = UCA3RXBUF;
-
-                    BufferChecking[BufferCount++] = RxData;
-                }
-                */
-
-/*
-                RxData = UCA3RXBUF;
-
-                //BufferChecking[BufferCount++] = RxData;
-                BufferChecking[BufferCount++] = RxData;
-                */
                 RxData = UCA2RXBUF;
 
-                //BufferChecking[BufferCount++] = RxData;
-                BufferChecking[BufferCount++] = RxData;
+                ucRxBuffer[BufferCount++] = RxData;
 
 
-                //if(RxData == 0xa5)
-                //{
-                /*
-                    if(BufferCount >= 11)
+
+                if(RxData == 0xa5 && BufferCount >= 12)
+                {
+                    int i=0;
+                    Data temp;
+
+                    if(ucRxBuffer[BufferCount-12] == 0xfd && ucRxBuffer[BufferCount-1] == 0xa5)
                     {
-                        BufferCount = 0;
-                        if(BufferChecking[0] == 0xfd && BufferChecking[10] == 0xa5)
+                        temp.mode = ucRxBuffer[BufferCount-11];
+                        for(i=0;i<9;i++)
                         {
-                            //if(BufferChecking[1] <= 3 && BufferChecking[3] <= 3 && BufferChecking[5] <= 3 && BufferChecking[7] <= 3)
-                           // {
-                                // error
-                                int i = 0;
-                                for(i = 0; i < 11; i++)
-                                {
-                                    Enqueue(&q, BufferChecking[i]);     // enqueue start
-                                }
-
-                            //}
-
-                            //if( (sizeof(q.queArr)/sizeof(unsigned char)) < 11)
-                            //{
-                            //    QueueInit(&q);
-                            //}
-
-
+                            temp.data[i] = ucRxBuffer[i+(BufferCount-10)];
                         }
-                        else
-                        {
-
-
-                            //for(ShiftCount = 0; ShiftCount< (sizeof(BufferChecking)/sizeof(unsigned char)); ShiftCount++)
-                            //{
-                            //    BufferChecking[ShiftCount] = BufferChecking[ShiftCount+1];
-                            //}
-                            //ufferChecking[sizeof(BufferChecking)/sizeof(unsigned char)] = 0;
-
-
-                        }
+                        Enqueue(&rxPcDataQueue, temp);
                     }
-                    else
-                    {
+                    BufferCount = 0;
+                }
 
+                //_commandZone(ucRxBuffer);
 
-                        //int i = 0;
-                        //for(i = 0; i < (sizeof(BufferChecking) / sizeof(unsigned char)); i++)
-                        //{
-                        //    BufferChecking[i] = 0;
-                        //}
-                        //
-                    }
-                //}
-                */
 
                 //TA0CCTL0 = CCIE;                          // TACCR0 interrupt disabled
 
