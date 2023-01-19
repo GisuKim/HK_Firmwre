@@ -75,9 +75,9 @@
 
 
 
-float Kp_Value[4] = {1.8, 1.75, 1.65, 1.75};
-float Ki_Value[4] = {0.6, 0.5, 0.55, 0.5};
-float Kd_Value[4] = {3.75, 3.65, 3.55, 3.65};
+float Kp_Value[5] = {0.6, 0.6, 1.65, 1.75, 1.75};
+float Ki_Value[5] = {0.1, 0.1, 0.55, 0.5, 0.5};
+float Kd_Value[5] = {0.08, 0.08, 0.2, 0.45, 0.2};
 
 
 // 현재 PID는 근사치에 가까움 PID 설정셋팅 그만
@@ -134,22 +134,22 @@ unsigned int ADC_Chenck[4];
 //double Ki_Value[4] = {0.4, 0.4, 0.4, 0.4};               // Kp = k1*T/L = 17, Ki = 2L = 0.4, Kd = 0.5L = 0.1
 //double Kd_Value[4] = {0.1, 0.1, 0.1, 0.1};
 
-volatile unsigned int PID_Flag[4] = {0, };     // if receive 'on' -> start PID, / 'off' -> end PID
+volatile unsigned int PID_Flag[5] = {0, };     // if receive 'on' -> start PID, / 'off' -> end PID
 //volatile float pidResult;
 
-volatile float pidResult[4] = {0, 0, 0, 0};     // pull up
-float AT_pidResult[4] = {0, 0, 0, 0};
+volatile float pidResult[5] = {0, 0, 0, 0,0};     // pull up
+float AT_pidResult[5] = {0, 0, 0, 0,0};
 
 //volatile int ConfigTemp[4] = {35, 35, 35, 35};
 
-volatile float ConfigTemp[4] = {35, 35, 35, 35};
-volatile unsigned int SendGpioFlag[4] = {0, };
+volatile char ConfigTemp[5] = {35, 35, 35, 35};
+volatile unsigned int SendGpioFlag[5] = {0, };
 
 float TB_Temp;
 
 float sensitivity = 0.3;       // 0에 가까워 질 수록 필터링 잘됨
-float filteringValue[4];
-float noFlilterTemp[4];
+float filteringValue[5];
+float noFlilterTemp[5];
 //--------------------------------------------------------------
 
 //---------------------- UART Command --------------------------
@@ -188,14 +188,14 @@ unsigned char DP_TransmitStart = 0;
 
 //////////////////////////       ADC       //////////////////////////
 
-float voltageArray[4];
-float TempVal[8];
-float PreTempVal[4] = {100, 100, 100, 100};
+signed char TempVal[5];
+char TargetTemp[5] = {20, 20, 20, 20, 20, 20};
+float PreTempVal[5] = {100, 100, 100, 100, 100};
 
 float TempI2C = 45.2;          // ���� ���ؼ� �ӽ� �µ� ����
 
 
-unsigned int ADC_Result[8];
+int ADC_Result[8];
 volatile int ADC_CalcurationFlag;
 //unsigned int ADC_Result[9];
 //unsigned int ADC_Result;
@@ -339,9 +339,9 @@ unsigned char P_MemoryBuffer[4][4];      // P-Gain  4 Channel and 4byte
 unsigned char I_MemoryBuffer[4][4];      // P-Gain  4 Channel and 4byte
 unsigned char D_MemoryBuffer[4][4];      // P-Gain  4 Channel and 4byte
 
-float Kp_Temp[4];
-float Ki_Temp[4];
-float Kd_Temp[4];
+float Kp_Temp[5];
+float Ki_Temp[5];
+float Kd_Temp[5];
 
 int FLASH_FLAG;
 
@@ -393,7 +393,7 @@ int pwmResult;
 
 int main(void)
 {
-    int i, k = 0;
+    unsigned int i=0;
     //int adc_index = 0;
     Init_ADC_GPIO();
     Init_PWM_GPIO();
@@ -486,8 +486,15 @@ int main(void)
             {
                 for(i=0;i<8;i++){
 
-                    TempVal[i] = temp_Calculator(ADC_Result[i] /= 5);
-                    TempVal[i] = 100 - TempVal[i];
+                    TempVal[i] = (char)temp_Calculator(ADC_Result[i] /= 5);
+                    if(TempVal[i]>55)
+                    {
+                        TempVal[i] = TempVal[i]-(signed char)55;
+                    }
+                    else
+                    {
+                        TempVal[i] = ((signed char)55 - TempVal[i]) * -1;
+                    }
                     ADC_Result[i] = 0;
                 }
                 sample_index = 0;
@@ -630,6 +637,33 @@ int main(void)
 
                 TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
             }
+
+            if(SendGpioFlag[4])
+            {
+                // PWM Control Start
+                // duty is PID result ( = range)
+
+                SendGpioFlag[4] = 0;
+
+                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
+                //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
+
+                //TB0CCR6 = ((MSP_CPU_CLK/5000)/100)*((int)(AT_pidResult[3] * 100));                          // CCR1 PWM duty cycle
+
+                TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
+                //TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
+
+                //TB0CCR1 = ((MSP_CPU_CLK/5000)/100)*((int)(AT_pidResult[3] * 100));                          // CCR1 PWM duty cycle
+
+                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
+                TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
+
+                TB0CCR1 = ((MSP_CPU_CLK/5000)/100)*((int)(AT_pidResult[2] * 100));                          // CCR1 PWM duty cycle
+
+                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
+
+                TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
+            }
         }
 
         if((DP_NORMAL_FLAG || AT_NORMAL_FLAG) && AT_START_FLAG != 1)
@@ -641,86 +675,10 @@ int main(void)
 
                 SendGpioFlag[0] = 0;
 
-                //-----------------------------Save Trigger zone ---------------------------
-                /*
-                if(TempVal[0] > ConfigTemp[0] + 3.6)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR3 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                    SaveKey[0] = 1;
-                }
-                else if(SaveKey[0] == 1 && TempVal[0] <= ConfigTemp[0] + 3.6 && TempVal[0] >= ConfigTemp[0]-0.5)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR3 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else if( (SaveKey[0] == 1 && TempVal[0] < ConfigTemp[0]-0.9) || SaveKey[0] == 0)
-                {
-                    SaveKey[0] = 0;
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR3 = (( (MSP_CPU_CLK/5000)-1 )/100)*((int)( (1-pidResult[0]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                //------------------------------------------------------------------------------------------------------------------------
-
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR3 = ((MSP_CPU_CLK/5000)/100)*((int)(pidResult[0] * 100));                          // CCR1 PWM duty cycle
-                /*
-                if(pidResult[0] <= 0)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR3 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR3 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[0]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-
-                //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-
-
-
-
-                //TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-
-                //pwmResult = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[0]) * 100));
-                //pwmResult = ((float)( (MSP_CPU_CLK/5000)-2 )/100.0)*((int)( (1-pidResult[0]) * 100));
-
-                //TB0CCR3 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[0]) * 100));                          // CCR1 PWM duty cycle
-                //TB0CCR3 = ((float)( (MSP_CPU_CLK/5000)-1 )/100.0)*((int)( (1-pidResult[0]) * 100));                 // CCR1 PWM duty cycle
-                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-
                 TB0CCR3 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[0]) * 100));                 // CCR1 PWM duty cycle
                 TB0CTL &= ~(TBIFG);                 // Clear FLAG
 
-                //if( (TempVal[0] > ConfigTemp[0] + 1)  || (TempVal[1] > ConfigTemp[1] + 1) || (TempVal[2] > ConfigTemp[2] + 1) || (TempVal[3] > ConfigTemp[3] + 1))
-                //{
-                //    P2OUT |= BIT2;
-                //}
-                //if( (TempVal[0] < ConfigTemp[0])  && (TempVal[1] < ConfigTemp[1] ) && (TempVal[2] < ConfigTemp[2]) && (TempVal[3] < ConfigTemp[3]) )
-                //{
-                //    P2OUT &= ~BIT2;
-                //}
+
 
             }
 
@@ -730,65 +688,6 @@ int main(void)
                 // duty is PID result ( = range)
 
                 SendGpioFlag[1] = 0;
-
-                //-----------------------------Save Trigger zone ---------------------------
-                /*
-                if(TempVal[1] > ConfigTemp[1] + 3.6)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR4 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                    SaveKey[1] = 1;
-                }
-                else if(SaveKey[1] == 1 && TempVal[1] <= ConfigTemp[1] + 3.6 && TempVal[1] >= ConfigTemp[1]-0.9)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR4 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else if( (SaveKey[1] == 1 && TempVal[1] < ConfigTemp[1]-0.9) || SaveKey[1] == 0)
-                {
-                    SaveKey[1] = 0;
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR4 = (( (MSP_CPU_CLK/5000)-1 )/100)*((int)( (1-pidResult[1]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                //--------------------------------------------------------
-
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR4 = ((MSP_CPU_CLK/5000)/100)*((int)(pidResult[1] * 100));                          // CCR1 PWM duty cycle
-                /*
-                if(pidResult[1] <= 0)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR4 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR4 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[1]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-                //TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR4 = ((float)( (MSP_CPU_CLK/5000)-1 )/100.0)*((int)( (1-pidResult[1]) * 100));                 // CCR1 PWM duty cycle
-
-                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
 
                 TB0CCR4 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[1]) * 100));                 // CCR1 PWM duty cycle
                 TB0CTL &= ~(TBIFG);     // Clear FLAG
@@ -801,72 +700,9 @@ int main(void)
 
                 SendGpioFlag[2] = 0;
 
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR5 = ((MSP_CPU_CLK/5000)/100)*((int)(pidResult[2] * 100));                          // CCR1 PWM duty cycle
-                /*
-                if(TempVal[2] > ConfigTemp[2] + 3.6)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR5 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                    SaveKey[2] = 1;
-                }
-                else if(SaveKey[2] == 1 && TempVal[2] <= ConfigTemp[2] + 3.6 && TempVal[2] >= ConfigTemp[2]-0.9)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR5 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else if( (SaveKey[2] == 1 && TempVal[2] < ConfigTemp[2]-0.9) || SaveKey[2] == 0)
-                {
-                    SaveKey[2] = 0;
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-
-                    TB0CCR5 = (( (MSP_CPU_CLK/5000)-1 )/100)*((int)( (1-pidResult[2]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                /*
-                if(pidResult[2] <= 0)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR5 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR5 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[2]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-                //TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR5 = ((float)( (MSP_CPU_CLK/5000)-1 )/100.0)*((int)( (1-pidResult[2]) * 100));                 // CCR1 PWM duty cycle                          // CCR1 PWM duty cycle
-
-                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-
                 TB0CCR5 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[2]) * 100));                 // CCR1 PWM duty cycle
                 TB0CTL &= ~(TBIFG);     // Clear FLAG
-                //if( (TempVal[0] > ConfigTemp[0] + 1)  || (TempVal[1] > ConfigTemp[1] + 1) || (TempVal[2] > ConfigTemp[2] + 1) || (TempVal[3] > ConfigTemp[3] + 1))
-                //{
-                //    P2OUT |= BIT2;
-                //}
-                //if( (TempVal[0] < ConfigTemp[0])  && (TempVal[1] < ConfigTemp[1] ) && (TempVal[2] < ConfigTemp[2]) && (TempVal[3] < ConfigTemp[3]) )
-                //{
-                //    P2OUT &= ~BIT2;
-                //}
+
             }
             if(SendGpioFlag[3])
             {
@@ -875,314 +711,22 @@ int main(void)
 
                 SendGpioFlag[3] = 0;
 
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR6 = ((MSP_CPU_CLK/5000)/100)*((int)(pidResult[3] * 100));                          // CCR1 PWM duty cycle
-
-                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-
-                //SendGpioFlag[3] = 0;
-
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR1 = (( MSP_CPU_CLK/5000 )/100)*((int)(pidResult[3] * 100));                          // CCR1 PWM duty cycle
-
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR6 = ((MSP_CPU_CLK/5000)/100)*((int)(pidResult[3] * 100));                          // CCR1 PWM duty cycle
-
-                /*
-                if(TempVal[3] > ConfigTemp[3] + 3.6)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR1 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR6 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                    SaveKey[3] = 1;
-                }
-                else if(SaveKey[3] == 1 && TempVal[3] <= ConfigTemp[3] + 3.6 && TempVal[3] >= ConfigTemp[3]-0.9)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR1 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR6 = ( (MSP_CPU_CLK/5000)-1 );                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-
-                }
-                else if( (SaveKey[3] == 1 && TempVal[3] < ConfigTemp[3]-0.9) || SaveKey[3] == 0)
-                {
-                    SaveKey[3] = 0;
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR1 = (( (MSP_CPU_CLK/5000)-1 )/100)*((int)( (1-pidResult[3]) * 100));                          // CCR1 PWM duty cycle
-
-                    //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR6 = (( (MSP_CPU_CLK/5000)-1 )/100)*((int)( (1-pidResult[3]) * 100));                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                /*
-                if(pidResult[3] <= 0)
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                    //TB0CCR6 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                    //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR1 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }
-                else
-                {
-                    TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                    TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                    TB0CCR1 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[3]) * 100));                          // CCR1 PWM duty cycle
-                    TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                }*/
-                //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-                //TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR1 = ((float)( (MSP_CPU_CLK/5000)-1 )/100.0)*((int)( (1-pidResult[3]) * 100));                 // CCR1 PWM duty cycle
-                //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-
-                TB0CCR1 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[3]) * 100));                 // CCR1 PWM duty cycle
+                TB0CCR6 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[3]) * 100)); //ch4                // CCR1 PWM duty cycle
                 TB0CTL &= ~(TBIFG);     // Clear FLAG
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                //TB0CCR6 = (( (MSP_CPU_CLK/5000)-2 )/100)*((int)( (1-pidResult[3]) * 100));                          // CCR1 PWM duty cycle
 
-
-                //if( (TempVal[0] > ConfigTemp[0] + 1)  || (TempVal[1] > ConfigTemp[1] + 1) || (TempVal[2] > ConfigTemp[2] + 1) || (TempVal[3] > ConfigTemp[3] + 1))
-                //{
-                //    P2OUT |= BIT2;
-                //}
-                //if( (TempVal[0] < ConfigTemp[0])  && (TempVal[1] < ConfigTemp[1] ) && (TempVal[2] < ConfigTemp[2]) && (TempVal[3] < ConfigTemp[3]) )
-                //{
-                //    P2OUT &= ~BIT2;
-                //}
             }
-            /*
-            if(checkTemp[0] == 1)
+
+            if(SendGpioFlag[4])
             {
-                checkTemp[0]= 0;
+                // PWM Control Start
+                // duty is PID result ( = range)
 
-                if((TempVal[0] > PreTempVal[0] + 3) || (TempVal[1] > PreTempVal[1] + 3) || (TempVal[2] > PreTempVal[2] + 3) || (TempVal[3] > PreTempVal[3] + 3))
-                {
-                    // Relay GPIO HIGH (ENABLE)
-                    P2OUT |= BIT2;
-                }
-                //if(TempVal[0] < PreTempVal[0]+1 && TempVal[1] < PreTempVal[1]+1 && TempVal[2] < PreTempVal[2]+1 && TempVal[3] < PreTempVal[3]+1)
-                //{
-                    // Relay GPIO LOW (DISABLE)
-                //   P2OUT &= ~BIT2;
-                //}
+                SendGpioFlag[4] = 0;
 
-                PreTempVal[0] = TempVal[0];
-                //PreTempVal[1] = TempVal[1];
-                //PreTempVal[2] = TempVal[2];
-                //PreTempVal[3] = TempVal[3];
+                TB0CCR1 = ((float)( (MSP_CPU_CLK/5000) )/100.0)*((int)( (1-pidResult[4]) * 100)); //ch4                // CCR1 PWM duty cycle
+                TB0CTL &= ~(TBIFG);     // Clear FLAG
+
             }
-            if(checkTemp[1] == 1)
-            {
-                checkTemp[1] = 0;
-                if( (TempVal[0] > PreTempVal[0] + 3) || (TempVal[1] > PreTempVal[1] + 3) || (TempVal[2] > PreTempVal[2] + 3) || (TempVal[3] > PreTempVal[3] + 3))
-                {
-                    // Relay GPIO HIGH (ENABLE)
-                    P2OUT |= BIT2;
-                }
-                //if(TempVal[0] < PreTempVal[0]+1 && TempVal[1] < PreTempVal[1]+1 && TempVal[2] < PreTempVal[2]+50 && TempVal[3] < PreTempVal[3]+50)
-                //{
-                //    // Relay GPIO LOW (DISABLE)
-                //    P2OUT &= ~BIT2;
-                //}
-
-                PreTempVal[1] = TempVal[1];
-            }
-            if(checkTemp[2] == 1)
-            {
-                checkTemp[2] = 0;
-
-                if(TempVal[2] > PreTempVal[2] + 3)
-                {
-                    // Relay GPIO HIGH (ENABLE)
-                    P2OUT |= BIT2;
-                }
-                //if(TempVal[0] < PreTempVal[0]+1 && TempVal[1] < PreTempVal[1]+1 && TempVal[2] < PreTempVal[2]+1 && TempVal[3] < PreTempVal[3]+1)
-                //{
-                //    // Relay GPIO LOW (DISABLE)
-                //    P2OUT &= ~BIT2;
-                //}
-
-                PreTempVal[2] = TempVal[2];
-            }
-            if(checkTemp[3] == 1)
-            {
-                checkTemp[3] = 0;
-
-                if(TempVal[3] > PreTempVal[3] + 3)
-                {
-                    // Relay GPIO HIGH (ENABLE)
-                    P2OUT |= BIT2;
-                }
-                //if(TempVal[0] < PreTempVal[0]+1 && TempVal[1] < PreTempVal[1]+1 && TempVal[2] < PreTempVal[2]+1 && TempVal[3] < PreTempVal[3]+1)
-                //{
-                    // Relay GPIO LOW (DISABLE)
-                //    P2OUT &= ~BIT2;
-                //}
-
-                PreTempVal[0] = TempVal[0];
-            }
-            */
-            /*
-            // monitoring in 1sec
-            if(RelayCheckFlag == 1)
-            {
-                RelayCheckFlag = 0;
-
-                // monitoring SW State
-
-                if(PID_Flag[0] == 1)
-                {
-                    // SW1 Arm ON
-                    if( (TempVal[0] > ConfigTemp[0] + 3) )
-                    {
-                        // Relay Enable
-                        P2OUT &= ~BIT2;
-                    }
-                }
-                else
-                {
-                    // SW1 OFF
-                    if(ConfigTemp[0] < 40)
-                    {
-                        if(TempVal[0] > 40)
-                        {
-                            P2OUT &= ~BIT2;
-                        }
-                    }
-
-                    else
-                    {
-
-                        if(TempVal[0] >= 40 && TempVal[0] < 60)
-                        {
-                            if( TempVal[0] >= PreTempVal[0] + 2.8 )
-                            {
-                                P2OUT &= ~BIT2;
-                            }
-                            PreTempVal[0] = TempVal[0];
-                        }
-                    }
-
-                }
-
-                if(PID_Flag[1] == 1)
-                {
-                    // SW2 Back ON
-                    if( (TempVal[1] > ConfigTemp[1] + 3))
-                    {
-                        P2OUT &= ~BIT2;
-                    }
-                }
-                else
-                {
-                    // SW2 OFF
-                    if(ConfigTemp[1] < 40)
-                    {
-                        if(TempVal[1] > 40)
-                        {
-                            P2OUT &= ~BIT2;
-                        }
-                    }
-
-                    else
-                    {
-                        if(TempVal[1] >= 40 && TempVal[1] < 60)
-                        {
-                            if( TempVal[1] >= PreTempVal[1] + 2.8)
-                            {
-                                P2OUT &= ~BIT2;
-                            }
-                            PreTempVal[1] = TempVal[1];
-                        }
-                    }
-                }
-                if(PID_Flag[2] == 1)
-                {
-                    // SW3 Leg ON
-                    if( (TempVal[2] > ConfigTemp[2] + 3) )
-                    {
-                        P2OUT &= ~BIT2;
-                    }
-                }
-                else
-                {
-                    // SW3 OFF
-                    if(ConfigTemp[2] < 40)
-                    {
-                        if(TempVal[2] > 40)
-                        {
-                            P2OUT &= ~BIT2;
-                        }
-                    }
-
-                    else
-                    {
-                        if(TempVal[2] >= 40 && TempVal[2] < 60)
-                        {
-                            if( TempVal[2] >= PreTempVal[2] + 2.8 )
-                            {
-                                P2OUT &= ~BIT2;
-                            }
-                            PreTempVal[2] = TempVal[2];
-                        }
-                    }
-                }
-                if(PID_Flag[3] == 1)
-                {
-                    // SW4 Roller ON
-                    if( (TempVal[3] >= ConfigTemp[3] + 3) )
-                    {
-                        P2OUT &= ~BIT2;
-                    }
-                }
-                else
-                {
-                    // SW4 OFF
-                    if(ConfigTemp[3] < 40)
-                    {
-                        if(TempVal[3] > 40)
-                        {
-                            P2OUT &= ~BIT2;
-                        }
-                    }
-
-                    else
-                    {
-                        if(TempVal[3] >= 40 && TempVal[3] < 60)
-                        {
-                            if( TempVal[3] >= PreTempVal[3] + 2.8 )
-                            {
-                                P2OUT &= ~BIT2;
-                            }
-                            PreTempVal[3] = TempVal[3];
-                        }
-                    }
-                }
-
-            }*/
-
 
         }
 
@@ -1362,7 +906,35 @@ void processPcCommand(Data command)
         PC_reQuestFlag = 0;
         AT_NORMAL_FLAG = 1;
         break;
+    case 0x81:  //controll msg
+        // Configuration target Temperature (PC 2.2)
 
+        SaveOnOffState = command.data[8];
+        //set heater target
+        ConfigTemp[0] = command.data[0];
+        ConfigTemp[1] = command.data[1];
+        ConfigTemp[2] = command.data[2];
+        ConfigTemp[3] = command.data[3];
+        ConfigTemp[4] = command.data[4];
+
+        TargetTemp[0] = ConfigTemp[0];
+        TargetTemp[1] = ConfigTemp[1];
+        TargetTemp[2] = ConfigTemp[2];
+        TargetTemp[3] = ConfigTemp[3];
+        TargetTemp[4] = ConfigTemp[4];
+
+        // Heater On/Off
+        PID_Flag[0] = (SaveOnOffState >> 7) & 0x01;
+        PID_Flag[1] = (SaveOnOffState >> 6) & 0x01;
+        PID_Flag[2] = (SaveOnOffState >> 5) & 0x01;
+        PID_Flag[3] = (SaveOnOffState >> 4) & 0x01;
+        PID_Flag[4] = (SaveOnOffState >> 3) & 0x01;
+        ADC_CH1_Controller = 1;
+//        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
+        I2C_Sensor = (SaveOnOffState >> 2) & 0x01;
+        PC_SendMessageFlag = 1;
+        MessageTx();    // Feedback Message
+        break;
 
     }
 
@@ -1846,17 +1418,10 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
 #error Compiler not supported!
 #endif
 {
-    int i = 0;
-    //static int timeCount_PID = 0;
-    //static int timeSamplingCount = 0;
-    //static int timeSendMessage = 0;
-    //static int timeCount_I2C = 0;
+    unsigned int i = 0;
 
-    //timeSendMessage += 1;
     timeCount_PID += 1;
     timeSamplingCount += 1;
-    //timeCount_I2C += 1;
-    //monitoringTime += 1;
 
 
     if(timeSamplingCount >= 10)         // 0.02sec       51ms
@@ -1886,95 +1451,17 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
     if(timeCount_PID >= 50)            // 125 = 0.1s                25 = 178.6ms         5 = 51ms    10 = 83ms   15   83
     {
         TB_Sensor_Flag = 1;
-        /*
-        if(SampleComplete)
+
+        for(i=0;i<8;i++)
         {
-            int k = 0;
-            for(k =0; k<4; k++){
-                voltageArray[k] = ((ADC_Sample[k])/4095.0) * 3.3;
-
-                // Resistor Change : 2.4K -> 2.5K
-                //TempVal[k] = ((-3.0257)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (33.586*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-146.22)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (317.92*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-365.75)*voltageArray[k]*voltageArray[k]) +
-                //                                (244.58 * voltageArray[k]) -57.066;
-
-                //TempVal[k] = ((-36.606)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (268.19*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                ((-770.59)*voltageArray[k]*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                                (1105.8*voltageArray[k]*voltageArray[k]*voltageArray[k]) +
-                //                               ((-839.64)*voltageArray[k]*voltageArray[k]) +
-                //                                (370.58 * voltageArray[k]) -57.066;
-                //TempVal[k] = (voltageArray[k] + 0.05) / 0.04923 + 0.00;
-
-                TempVal[k] = (0.01586)*ADC_Sample[k];
+            if(TempVal[i] < -50)
+            {
+                TempVal[i] = -50;
             }
-
-            SampleComplete = 0;
-
-
-        }
-        */
-        if(TempVal[0] < 0)
-        {
-            TempVal[0] = 0;
-        }
-        else if(TempVal[0] > 300)
-        {
-            TempVal[0] = 300;
-        }
-        if(TempVal[1] < 0)
-        {
-            TempVal[1] = 0;
-        }
-        else if(TempVal[1] > 300)
-        {
-            TempVal[1] = 300;
-        }
-        if(TempVal[2] < 0)
-        {
-            TempVal[2] = 0;
-        }
-        else if(TempVal[2] > 300)
-        {
-            TempVal[2] = 300;
-        }
-        if(TempVal[3] < 0)
-        {
-            TempVal[3] = 0;
-        }
-        else if(TempVal[3] > 300)
-        {
-            TempVal[3] = 300;
-        }
-
-        // ch1 byte split
-        tempIntVal_ch1 = ((floor(TempVal[0]*10)/10) *10);
-        targetIntVal_ch1 = (ConfigTemp[0]*10);
-
-
-        tempIntVal_ch2 = ((floor(TempVal[1]*10)/10) *10);
-        targetIntVal_ch2 = (ConfigTemp[1]*10);
-
-        // ch3 byte split
-        tempIntVal_ch3 = ((floor(TempVal[2]*10)/10) *10);
-        targetIntVal_ch3 = (ConfigTemp[2]*10);
-
-        // ch4 byte split
-        tempIntVal_ch4 = ((floor(TempVal[3]*10)/10) *10);
-        targetIntVal_ch4 = (ConfigTemp[3]*10);
-
-
-        // I2C byte split
-        tempIntVal_i2c = ((floor(TempI2C*10)/10) *10);
-        //*p_I2C_temp = (char *)&tempIntVal_i2c;
-
-        if(AT_START_FLAG == 1)
-        {
-            AT_currentTemp = ((floor(TempVal[Selected_Channel] *10) /10) *10);
-            //AT_targetTemp = (ConfigTemp[Selected_Channel]*10);
+            else if(TempVal[i] > 90)
+            {
+                TempVal[i] = 90;
+            }
         }
 
         PC_SendMessageFlag = 1;
@@ -1985,24 +1472,9 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
 
              if(ADC_CH1_Controller == 1)
              {
-                 /*
-                 if(TempVal[0] > ConfigTemp[0]+0.5)
-                  {
-                      pidResult[0] = 0;
-                      TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                      TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-                      TB0CCR3 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
 
-                      TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                      SendGpioFlag[0] = 0;
-                  }
-                 else
-                 {
-                     pidResult[0] = PID_Contorller(Kp_Value[0], Ki_Value[0], Kd_Value[0], ConfigTemp[0], TempVal[0]);
-                     SendGpioFlag[0] = 1;
-                 }*/
                  pidResult[0] = PID_Contorller(Kp_Value[0], Ki_Value[0], Kd_Value[0], ConfigTemp[0], TempVal[0]);
-                 //pidResult[0] = PID_Contorller(Kp_Value[0], Ki_Value[0], Kd_Value[0], ConfigTemp[0], 44.8);
+
                  SendGpioFlag[0] = 1;
              }
              if(I2C_Sensor == 1)
@@ -2018,37 +1490,16 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
             //Relay_Check[0] = 1;
 
             pidResult[0] = 0;
-            //P3OUT &= ~BIT4;         // must change output LOW
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
-            //TB0CCR3 = ((MSP_CPU_CLK/5000)/100)*(0);                          // CCR1 PWM duty cycle
 
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL3 = OUTMOD_7;                    // CCR1 reset/set
             TB0CCR3 = (MSP_CPU_CLK/5000);                          // CCR1 PWM duty cycle
 
             TB0CTL &= ~(TBIFG);
-            //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
+
         }
 
         if(PID_Flag[1])
         {
-            /*
-            if(TempVal[1] > ConfigTemp[1]+0.5)
-             {
-                 pidResult[1] = 0;
-                 TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                 TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-                 TB0CCR4 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
 
-                 TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                 SendGpioFlag[1] = 0;
-             }
-             else
-             {
-                 pidResult[1] = PID_Contorller(Kp_Value[1], Ki_Value[1], Kd_Value[1], ConfigTemp[1], TempVal[1]);
-                 SendGpioFlag[1] = 1;
-             }*/
              pidResult[1] = PID_Contorller(Kp_Value[1], Ki_Value[1], Kd_Value[1], ConfigTemp[1], TempVal[1]);
              SendGpioFlag[1] = 1;
         }
@@ -2058,37 +1509,15 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
             //Relay_Check[1] = 1;
 
             pidResult[1] = 0;
-            //P3OUT &= ~BIT5;         // must change output LOW
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-            //TB0CCR4 = ((MSP_CPU_CLK/5000)/100)*(0);                          // CCR1 PWM duty cycle
 
-            //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-            //TB0CCTL4 = OUTMOD_7;                    // CCR1 reset/set
-            TB0CCR4 = (MSP_CPU_CLK/5000);                          // CCR1 PWM duty cycle
 
             TB0CTL &= ~(TBIFG);
-            //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
+
         }
 
         if(PID_Flag[2])
         {
-            /*
-             if(TempVal[2] > ConfigTemp[2]+0.5)
-             {
-                 pidResult[2] = 0;
-                 TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                 TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-                 TB0CCR5 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
 
-                 TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                 SendGpioFlag[2] = 0;
-             }
-             else
-             {
-                 pidResult[2] = PID_Contorller(Kp_Value[2], Ki_Value[2], Kd_Value[2], ConfigTemp[2], TempVal[2]);
-                 SendGpioFlag[2] = 1;
-             }*/
              pidResult[2] = PID_Contorller(Kp_Value[2], Ki_Value[2], Kd_Value[2], ConfigTemp[2], TempVal[2]);
              SendGpioFlag[2] = 1;
         }
@@ -2098,42 +1527,16 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
             //Relay_Check[2] = 1;
 
             pidResult[2] = 0;
-            //P3OUT &= ~BIT6;         // must change output LOW
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
-            //TB0CCR5 = ((MSP_CPU_CLK/5000)/100)*(0);                          // CCR1 PWM duty cycle
-
-            //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-            //TB0CCTL5 = OUTMOD_7;                    // CCR1 reset/set
             TB0CCR5 = (MSP_CPU_CLK/5000);                          // CCR1 PWM duty cycle
 
             TB0CTL &= ~(TBIFG);
 
-            //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
+
         }
 
         if(PID_Flag[3])
         {
-            /*
-            if(TempVal[3] > ConfigTemp[3])
-            {
-                pidResult[3] = 0;
-                TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-                TB0CCR6 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
 
-                //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-                TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-                TB0CCR1 = (MSP_CPU_CLK/5000)-2;                          // CCR1 PWM duty cycle
-
-                TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
-                SendGpioFlag[3] = 0;
-            }
-            else
-            {
-                pidResult[3] = PID_Contorller(Kp_Value[3], Ki_Value[3], Kd_Value[3], ConfigTemp[3], TempVal[3]);
-                SendGpioFlag[3] = 1;
-            }*/
             pidResult[3] = PID_Contorller(Kp_Value[3], Ki_Value[3], Kd_Value[3], ConfigTemp[3], TempVal[3]);
             SendGpioFlag[3] = 1;
         }
@@ -2143,24 +1546,26 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
             //Relay_Check[3] = 1;
 
             pidResult[3] = 0;
-            //P3OUT &= ~BIT7;         // must change output LOW
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
-            //TB0CCR6 = ((MSP_CPU_CLK/5000)/100)*(0);                          // CCR1 PWM duty cycle
 
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-            //TB0CCR1 = ((MSP_CPU_CLK/5000)/100)*(0);                          // CCR1 PWM duty cycle
-
-
-            //TB0CCR0 = (MSP_CPU_CLK/5000);                       // PWM Period
-            //TB0CCTL6 = OUTMOD_7;                    // CCR1 reset/set
             TB0CCR6 = (MSP_CPU_CLK/5000);                          // CCR1 PWM duty cycle
+            TB0CTL &= ~(TBIFG);
 
-            //TB0CCR0 = (MSP_CPU_CLK/5000)-1;                       // PWM Period
-            //TB0CCTL1 = OUTMOD_7;                    // CCR1 reset/set
-            TB0CCR1 = (MSP_CPU_CLK/5000);                          // CCR1 PWM duty cycle
 
+        }
+
+        if(PID_Flag[4])
+        {
+
+            pidResult[4] = PID_Contorller(Kp_Value[4], Ki_Value[4], Kd_Value[4], ConfigTemp[4], TempVal[4]);
+            SendGpioFlag[4] = 1;
+        }
+        else
+        {
+            // Heater Off
+            //Relay_Check[3] = 1;
+
+            pidResult[4] = 0;
+            TB0CCR1 = (MSP_CPU_CLK/5000);                       // PWM Period
             TB0CTL &= ~(TBIFG);
 
             //TB0CTL = TBSSEL__SMCLK | MC__UP | TBCLR;// SMCLK, up mode, clear TBR
@@ -2265,55 +1670,50 @@ void MessageTx(void)
     if(PC_SendMessageFlag == 1 && AT_NORMAL_FLAG == 1)
     {
 
-        if( ((tempIntVal_ch1 & (0xFF << 8)) >> 8)  < 0x03 && ((tempIntVal_ch2 & (0xFF << 8)) >> 8)  < 0x03
-                && ((tempIntVal_ch3 & (0xFF << 8)) >> 8)  < 0x03 && ((tempIntVal_ch4 & (0xFF << 8)) >> 8)  < 0x03
-                && ((targetIntVal_ch1 & (0xFF << 8)) >> 8) < 0x03 && ((targetIntVal_ch2 & (0xFF << 8)) >> 8) < 0x03
-                && ((targetIntVal_ch3 & (0xFF << 8)) >> 8) < 0x03 && ((targetIntVal_ch4 & (0xFF << 8)) >> 8) < 0x03
-        )
-        {
-            //UCA1IE &= ~UCRXIE;
-            //UCA3IE &= ~UCRXIE;
 
-            fput_data(0xfe);
+        //UCA1IE &= ~UCRXIE;
+        //UCA3IE &= ~UCRXIE;
 
-            fput_data(0x90);
+        fput_data(0xfe);
 
-            fput_data( (tempIntVal_ch1 & (0xFF << 8)) >> 8 );
-            fput_data( (tempIntVal_ch1 & (0xFF << 0)) >> 0 );
+        fput_data(0x90);
 
-            fput_data( (targetIntVal_ch1 & (0xFF << 8)) >> 8 );
-            fput_data( (targetIntVal_ch1 & (0xFF << 0)) >> 0 );
+        fput_data(TempVal[0]);
+        fput_data(TargetTemp[0]);
 
-            fput_data( (tempIntVal_ch2 & (0xFF << 8)) >> 8 );
-            fput_data( (tempIntVal_ch2 & (0xFF << 0)) >> 0 );
+        fput_data(TempVal[1]);
+        fput_data(TargetTemp[1]);
 
-            fput_data( (targetIntVal_ch2 & (0xFF << 8)) >> 8 );
-            fput_data( (targetIntVal_ch2 & (0xFF << 0)) >> 0 );
+        fput_data(TempVal[2]);
+        fput_data(TargetTemp[2]);
 
-            fput_data( (tempIntVal_ch3 & (0xFF << 8)) >> 8 );
-            fput_data( (tempIntVal_ch3 & (0xFF << 0)) >> 0 );
+        fput_data(TempVal[3]);
+        fput_data(TargetTemp[3]);
 
-            fput_data( (targetIntVal_ch3 & (0xFF << 8)) >> 8 );
-            fput_data( (targetIntVal_ch3 & (0xFF << 0)) >> 0 );
+        fput_data(TempVal[4]);
+        fput_data(TargetTemp[4]);
 
-            fput_data( (tempIntVal_ch4 & (0xFF << 8)) >> 8 );
-            fput_data( (tempIntVal_ch4 & (0xFF << 0)) >> 0 );
+        fput_data(0x00);
+        fput_data(0x00);
 
-            fput_data( (targetIntVal_ch4 & (0xFF << 8)) >> 8 );
-            fput_data( (targetIntVal_ch4 & (0xFF << 0)) >> 0 );
+        fput_data(0x00);
+        fput_data(0x00);
 
-            fput_data( (tempIntVal_i2c & (0xFF << 8)) >> 8 );
-            fput_data( (tempIntVal_i2c & (0xFF << 0)) >> 0 );
+        fput_data(0x00);
+        fput_data(0x00);
 
-            fput_data( SaveOnOffState );
+        fput_data(0x00);
+        fput_data(0x00);
 
-            fput_data( 0xa5 );
+        fput_data( SaveOnOffState );
 
-            PC_SendMessageFlag = 0;
+        fput_data( 0xa5 );
 
-            //UCA3IE |= UCRXIE;
-            //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-        }
+        PC_SendMessageFlag = 0;
+
+        //UCA3IE |= UCRXIE;
+        //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
+
     }
 
     // Send message about current Temperature in Tuning Start (4.2)
