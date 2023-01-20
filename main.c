@@ -67,6 +67,7 @@
 //#include <time.h>
 #include <math.h>
 #include "Driver/include/LNJT103F_NTC.h"
+#include "Driver/include/slave_protocol.h"
 
 #define OFFSETVOLTAGE 0.1
 #define MSP_CPU_CLK 4000000
@@ -134,15 +135,15 @@ unsigned int ADC_Chenck[4];
 //double Ki_Value[4] = {0.4, 0.4, 0.4, 0.4};               // Kp = k1*T/L = 17, Ki = 2L = 0.4, Kd = 0.5L = 0.1
 //double Kd_Value[4] = {0.1, 0.1, 0.1, 0.1};
 
-volatile unsigned int PID_Flag[5] = {0, };     // if receive 'on' -> start PID, / 'off' -> end PID
+volatile unsigned int PID_Flag[10] = {0, };     // if receive 'on' -> start PID, / 'off' -> end PID
 //volatile float pidResult;
 
-volatile float pidResult[5] = {0, 0, 0, 0,0};     // pull up
-float AT_pidResult[5] = {0, 0, 0, 0,0};
+volatile float pidResult[10] = {0,};     // pull up
+float AT_pidResult[10] = {0,};
 
 //volatile int ConfigTemp[4] = {35, 35, 35, 35};
 
-volatile char ConfigTemp[5] = {35, 35, 35, 35};
+volatile char ConfigTemp[10] = {35, 35, 35, 35, 35, 35, 35, 35, 35, 35};
 volatile unsigned int SendGpioFlag[5] = {0, };
 
 float TB_Temp;
@@ -188,8 +189,8 @@ unsigned char DP_TransmitStart = 0;
 
 //////////////////////////       ADC       //////////////////////////
 
-signed char TempVal[5];
-char TargetTemp[5] = {20, 20, 20, 20, 20, 20};
+signed char TempVal[10];
+char TargetTemp[10] = {20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20};
 float PreTempVal[5] = {100, 100, 100, 100, 100};
 
 float TempI2C = 45.2;          // ���� ���ؼ� �ӽ� �µ� ����
@@ -202,8 +203,8 @@ volatile int ADC_CalcurationFlag;
 //float ;
 float ADC_Sample[4];
 volatile unsigned int ADC_Temp[8];
-unsigned char SaveOnOffState = 0x00;
-
+unsigned char SaveMasterOnOffState = 0x00;
+unsigned char SaveSlaveOnOffState = 0x00;
 
 
 //volatile unsigned int ADC_Temp[5];
@@ -225,14 +226,14 @@ void Init_SMCLK_16MHZ(void);
 void Init_ADC_GPIO(void);
 void Init_ADC(void);
 void processPcCommand(Data command);
+void processMasterCommand(Data command);
+void processSlaveCommand(Data command);
 void Init_TIMER_A0(void);
 
 // change parameter and return value as float -> double
 float PID_Contorller(float kp, float ki, float kd, float targetValue, float readValue);
 
 int AnalogRead(uint8_t channel);
-void MessageTx(void);
-void MessageTx2(void);
 void Tx_PID_Tuning(unsigned char commandTx, unsigned char SelectedChannel);
 
 
@@ -249,25 +250,6 @@ int monitoringTime;
 extern unsigned char CheckBreak;
 
 //------------------------------- TB I2C -----------------------------------------------------------
-
-int TB_Sensor_Flag;
-
-#define TBP_ADDR 0x3A
-
-int     RX_Byte_Ctr,        // Coutner to make sure all of the information is received
-        TX_Byte_Ctr,        // Counter to make sure all of the information is sent
-        i;                  // Integer used for counting sent bytes
-char    i2cData[3],          // Creates an array to store data
-        //sending[1],         // Creates an array to store the sent data
-        *pointer,           // Creates a pointer to access the array
-        *txPtr;
-
-int16_t _rawObject;
-int16_t result_object;
-//int16_t _rawSensor;
-uint8_t BUF[5];
-int16_t *dest_call;
-int PEC_ture;
 
 const unsigned char crc8_table[256]=          //CRC table (Please don't change this value)
 {
@@ -289,35 +271,6 @@ const unsigned char crc8_table[256]=          //CRC table (Please don't change t
     0xDE, 0xD9, 0xD0, 0xD7, 0xC2, 0xC5, 0xCC, 0xCB,    0xE6, 0xE1, 0xE8, 0xEF, 0xFA, 0xFD, 0xF4, 0xF3
 };
 
-
-float CalcTemp(int rawTemp);                    // �µ����
-uint8_t GetObject(void);                   // ���µ� �б�
-uint8_t CalPEC(uint8_t *crc, uint8_t nBytes);  // PEC ����
-
-
-
-
-
-void getData(void){
-
-    pointer = &i2cData;                       // Sets the pointer to the height array
-    RX_Byte_Ctr = 3;                        // Determines the number of bytes received
-    TX_Byte_Ctr = 1;                        // Determines the number of bytes sent
-    UCB2I2CSA = TBP_ADDR;           // Sets slave address
-
-    UCB2TBCNT = 0x01;   // Expecting to receive 3 bytes of data
-    UCB2CTLW0 |= UCTR | UCTXSTT;            // Enables TX Mode, Sends start condition
-    //__bis_SR_register(LPM0_bits | GIE);     // Enters Low-Power mode and enables global interrupt ???
-
-    //UCB2CTLW1 |= UCASTP_2;  // Sends stop bit when UCTBCNT is reached
-    UCB2TBCNT = 3;   // Expecting to receive 3 bytes of data
-    //__delay_cycles(20);
-    //__delay_cycles(2000);
-    __delay_cycles(2000);
-    UCB2CTLW0 &= ~UCTR;                      // Enters RX Mode
-    UCB2CTLW0 |= UCTXSTT;                    // Sends start condition
-    //__bis_SR_register(LPM0_bits | GIE);     // Enters Low-Power mode and enables global interrupt  ???
-}
 
 //----------------------------------------------------------------------------------------------------------------------
 
@@ -359,19 +312,16 @@ unsigned char __attribute__((persistent)) FRAM_write[WRITE_SIZE] = {0};
 #error Compiler not supported!
 #endif
 
-
-extern int BufferCount;
-extern int ShiftCount;
-extern unsigned char ucRxBuffer[12];
 extern Queue rxPcDataQueue;
-extern int BufferCount2;
-extern unsigned char BufferChecking2[12];
+extern Queue rxSlaveDataQueue;
+
 //int AT_MODE_FLAG;
 
 unsigned char AT_NORMAL_FLAG = 0;
 unsigned char AT_STOP_FLAG = 0;
 unsigned char AT_START_FLAG = 0;
 unsigned char DP_NORMAL_FLAG = 0;
+unsigned char f_masterMode = 0;
 
 unsigned char Selected_Channel;
 unsigned short int AT_currentTemp;
@@ -484,7 +434,7 @@ int main(void)
 
             if(sample_index == 5)
             {
-                for(i=0;i<8;i++){
+                for(i=0;i<5;i++){
 
                     TempVal[i] = (char)temp_Calculator(ADC_Result[i] /= 5);
                     if(TempVal[i]>55)
@@ -511,19 +461,19 @@ int main(void)
         }
 
 
-        // 1. 전시기 명령어 처리 구간 / 튜닝 진입시 처리 안함
-        if(RxData2 == 0xa5)
+        if(QIsEmpty(&rxSlaveDataQueue) != 1)
         {
-            if(BufferCount2 >= 12)
+            if(f_masterMode == 1)
             {
-                // Displayer command process
-                BufferCount2 = 0;
-                if(BufferChecking2[0] == 0xfc && BufferChecking2[11] == 0xa5)
-                {
-                    _commandZone(BufferChecking2);
-                }
+                processMasterCommand(Dequeue(&rxSlaveDataQueue));
             }
+            else
+            {
+                processSlaveCommand(Dequeue(&rxSlaveDataQueue));
+            }
+
         }
+
 
         /*
         if(AT_NORMAL_FLAG == 1 || AT_START_FLAG == 1)
@@ -827,10 +777,12 @@ int main(void)
             MessageTx();
         }
 
-        if(DP_NORMAL_FLAG)
+        if(f_masterMode == 0 && DP_NORMAL_FLAG)  //slave mode
         {
-            MessageTx2();
+            MessageTxMaster();
         }
+
+
 
         if(AT_NORMAL_FLAG == 1 && AT_START_FLAG != 0)
         {
@@ -905,11 +857,15 @@ void processPcCommand(Data command)
     case 0xc0:  //connect Ack Req
         PC_reQuestFlag = 0;
         AT_NORMAL_FLAG = 1;
+
+        f_masterMode = 1;
+        ConnectMsgSendToSlave();        //1. Slave에 연결 요청 Mode B0 M->S
+
         break;
     case 0x81:  //controll msg
         // Configuration target Temperature (PC 2.2)
 
-        SaveOnOffState = command.data[8];
+        SaveMasterOnOffState = command.data[8];
         //set heater target
         ConfigTemp[0] = command.data[0];
         ConfigTemp[1] = command.data[1];
@@ -924,14 +880,127 @@ void processPcCommand(Data command)
         TargetTemp[4] = ConfigTemp[4];
 
         // Heater On/Off
-        PID_Flag[0] = (SaveOnOffState >> 7) & 0x01;
-        PID_Flag[1] = (SaveOnOffState >> 6) & 0x01;
-        PID_Flag[2] = (SaveOnOffState >> 5) & 0x01;
-        PID_Flag[3] = (SaveOnOffState >> 4) & 0x01;
-        PID_Flag[4] = (SaveOnOffState >> 3) & 0x01;
+        PID_Flag[0] = (SaveMasterOnOffState >> 7) & 0x01;
+        PID_Flag[1] = (SaveMasterOnOffState >> 6) & 0x01;
+        PID_Flag[2] = (SaveMasterOnOffState >> 5) & 0x01;
+        PID_Flag[3] = (SaveMasterOnOffState >> 4) & 0x01;
+        PID_Flag[4] = (SaveMasterOnOffState >> 3) & 0x01;
         ADC_CH1_Controller = 1;
 //        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
-        I2C_Sensor = (SaveOnOffState >> 2) & 0x01;
+        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
+        PC_SendMessageFlag = 1;
+        MessageTx();    // Feedback Message
+        break;
+
+    case 0x82:  //controll msg
+        // Configuration target Temperature (PC 2.2)
+
+        sendCommandToSlave(command);
+        break;
+    }
+
+}
+
+void processMasterCommand(Data command) //Maseter <--- Slave
+{
+    switch(command.mode)
+    {
+    case 0xa0:  //connect Ack Req
+        ConnectAckMsgSendToSlave();         //3. 실행 시작 전송 Mode B1 M->S
+        break;
+    case 0xa1:  //controll msg
+        // Configuration target Temperature (PC 2.2)
+
+        SaveSlaveOnOffState = command.data[10];
+        //set heater target
+        TempVal[5] = command.data[0];
+        TempVal[6] = command.data[2];
+        TempVal[7] = command.data[4];
+        TempVal[8] = command.data[6];
+        TempVal[9] = command.data[8];
+
+        TargetTemp[5] = ConfigTemp[1];
+        TargetTemp[6] = ConfigTemp[3];
+        TargetTemp[7] = ConfigTemp[5];
+        TargetTemp[8] = ConfigTemp[7];
+        TargetTemp[9] = ConfigTemp[9];
+
+        break;
+    case 0xb3:  //controll msg
+        // Configuration target Temperature (PC 2.2)
+
+        SaveMasterOnOffState = command.data[8];
+        //set heater target
+        ConfigTemp[5] = command.data[0];
+        ConfigTemp[6] = command.data[1];
+        ConfigTemp[7] = command.data[2];
+        ConfigTemp[8] = command.data[3];
+        ConfigTemp[9] = command.data[4];
+
+        TargetTemp[5] = ConfigTemp[0];
+        TargetTemp[6] = ConfigTemp[1];
+        TargetTemp[7] = ConfigTemp[2];
+        TargetTemp[8] = ConfigTemp[3];
+        TargetTemp[9] = ConfigTemp[4];
+
+        // Heater On/Off
+        PID_Flag[5] = (SaveSlaveOnOffState >> 7) & 0x01;
+        PID_Flag[6] = (SaveSlaveOnOffState >> 6) & 0x01;
+        PID_Flag[7] = (SaveSlaveOnOffState >> 5) & 0x01;
+        PID_Flag[8] = (SaveSlaveOnOffState >> 4) & 0x01;
+        PID_Flag[9] = (SaveSlaveOnOffState >> 3) & 0x01;
+        ADC_CH1_Controller = 1;
+//        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
+        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
+        PC_SendMessageFlag = 1;
+        MessageTx();    // Feedback Message
+        break;
+
+
+
+    }
+
+}
+
+void processSlaveCommand(Data command) //Maseter ---> Slave
+{
+    switch(command.mode)
+    {
+    case 0xb0:  //connect requeast
+        DP_SendMessageFlag = 1;
+        DP_reQuestFlag = 1;
+       MessageTxMaster();    // Feedback Message  //2. Master에 ACK 전송 Mode a0 S->M
+        break;
+    case 0xb1: //connect complete
+        DP_reQuestFlag=0;
+        DP_NORMAL_FLAG = 1;
+        break;
+    case 0xb3:  //controll msg
+        // Configuration target Temperature (PC 2.2)
+
+        SaveMasterOnOffState = command.data[8];
+        //set heater target
+        ConfigTemp[0] = command.data[0];
+        ConfigTemp[1] = command.data[1];
+        ConfigTemp[2] = command.data[2];
+        ConfigTemp[3] = command.data[3];
+        ConfigTemp[4] = command.data[4];
+
+        TargetTemp[0] = ConfigTemp[0];
+        TargetTemp[1] = ConfigTemp[1];
+        TargetTemp[2] = ConfigTemp[2];
+        TargetTemp[3] = ConfigTemp[3];
+        TargetTemp[4] = ConfigTemp[4];
+
+        // Heater On/Off
+        PID_Flag[0] = (SaveMasterOnOffState >> 7) & 0x01;
+        PID_Flag[1] = (SaveMasterOnOffState >> 6) & 0x01;
+        PID_Flag[2] = (SaveMasterOnOffState >> 5) & 0x01;
+        PID_Flag[3] = (SaveMasterOnOffState >> 4) & 0x01;
+        PID_Flag[4] = (SaveMasterOnOffState >> 3) & 0x01;
+        ADC_CH1_Controller = 1;
+//        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
+        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
         PC_SendMessageFlag = 1;
         MessageTx();    // Feedback Message
         break;
@@ -947,7 +1016,7 @@ void _commandZone(unsigned char *_newCommand)
     {
         // Receive Configuration Temperature and Heater ON/OFF Status (DP 3.1)
 
-        SaveOnOffState = _newCommand[10];
+        SaveMasterOnOffState = _newCommand[10];
 
         if(((_newCommand[2]<<8)+_newCommand[3]) <= 3000)
         //if(((_newCommand[2]<<8)+_newCommand[3]) <= 650)
@@ -976,7 +1045,7 @@ void _commandZone(unsigned char *_newCommand)
 
 
         // Heater On/Off
-        if( (SaveOnOffState & (0x1 << 7 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 7 )) >= 1)
         {
             PID_Flag[0] = 1;
         }
@@ -984,7 +1053,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[0] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 6 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 6 )) >= 1)
         {
             PID_Flag[1] = 1;
         }
@@ -992,7 +1061,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[1] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 5 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 5 )) >= 1)
         {
             PID_Flag[2] = 1;
         }
@@ -1000,7 +1069,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[2] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 4 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 4 )) >= 1)
         {
             PID_Flag[3] = 1;
         }
@@ -1008,7 +1077,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[3] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 3 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 3 )) >= 1)
         {
             ADC_CH1_Controller = 0;
             I2C_Sensor = 1;
@@ -1145,7 +1214,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             // Configuration target Temperature (PC 2.2)
 
-            SaveOnOffState = _newCommand[10];
+            SaveMasterOnOffState = _newCommand[10];
 
             if(((_newCommand[2]<<8)+_newCommand[3]) <= 3000)
             {
@@ -1170,7 +1239,7 @@ void _commandZone(unsigned char *_newCommand)
 
 
             // Heater On/Off
-            if( (SaveOnOffState & (0x1 << 7 )) >= 1)
+            if( (SaveMasterOnOffState & (0x1 << 7 )) >= 1)
             {
                 PID_Flag[0] = 1;
             }
@@ -1178,7 +1247,7 @@ void _commandZone(unsigned char *_newCommand)
             {
                 PID_Flag[0] = 0;
             }
-            if( (SaveOnOffState & (0x1 << 6 )) >= 1)
+            if( (SaveMasterOnOffState & (0x1 << 6 )) >= 1)
             {
                 PID_Flag[1] = 1;
             }
@@ -1186,7 +1255,7 @@ void _commandZone(unsigned char *_newCommand)
             {
                 PID_Flag[1] = 0;
             }
-            if( (SaveOnOffState & (0x1 << 5 )) >= 1)
+            if( (SaveMasterOnOffState & (0x1 << 5 )) >= 1)
             {
                 PID_Flag[2] = 1;
             }
@@ -1194,7 +1263,7 @@ void _commandZone(unsigned char *_newCommand)
             {
                 PID_Flag[2] = 0;
             }
-            if( (SaveOnOffState & (0x1 << 4 )) >= 1)
+            if( (SaveMasterOnOffState & (0x1 << 4 )) >= 1)
             {
                 PID_Flag[3] = 1;
             }
@@ -1202,7 +1271,7 @@ void _commandZone(unsigned char *_newCommand)
             {
                 PID_Flag[3] = 0;
             }
-            if( (SaveOnOffState & (0x1 << 3 )) >= 1)
+            if( (SaveMasterOnOffState & (0x1 << 3 )) >= 1)
             {
                 ADC_CH1_Controller = 0;
                 I2C_Sensor = 1;
@@ -1249,7 +1318,7 @@ void _commandZone(unsigned char *_newCommand)
         //float AT_curretTemp;
 
         unsigned char pidNgain = _newCommand[9];
-        SaveOnOffState = Selected_Channel;
+        SaveMasterOnOffState = Selected_Channel;
         // Tuning START
         /*
         if(((_newCommand[2]<<8)+_newCommand[3]) <= 3000)
@@ -1275,7 +1344,7 @@ void _commandZone(unsigned char *_newCommand)
         }
 
         // Heater On/Off
-        if( (SaveOnOffState & (0x1 << 7 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 7 )) >= 1)
         {
             PID_Flag[0] = 1;
         }
@@ -1283,7 +1352,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[0] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 6 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 6 )) >= 1)
         {
             PID_Flag[1] = 1;
         }
@@ -1291,7 +1360,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[1] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 5 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 5 )) >= 1)
         {
             PID_Flag[2] = 1;
         }
@@ -1299,7 +1368,7 @@ void _commandZone(unsigned char *_newCommand)
         {
             PID_Flag[2] = 0;
         }
-        if( (SaveOnOffState & (0x1 << 4 )) >= 1)
+        if( (SaveMasterOnOffState & (0x1 << 4 )) >= 1)
         {
             PID_Flag[3] = 1;
         }
@@ -1343,7 +1412,7 @@ void _commandZone(unsigned char *_newCommand)
         // Send PID Stop Signal
         // Exit Tunning StartFlag = 0
         Selected_Channel = 0x00;
-        SaveOnOffState = 0x00;
+        SaveMasterOnOffState = 0x00;
 
         TuningStartFlag = 0;
         TuningStopFlag = 1;
@@ -1403,7 +1472,7 @@ void _commandZone(unsigned char *_newCommand)
         //AT_START_FLAG = 0;
         //AT_STOP_FLAG = 0;
         //DP_NORMAL_FLAG = 0;
-        MessageTx2();    // Feedback Message
+        MessageTxMaster();    // Feedback Message
     }
 
 }
@@ -1452,7 +1521,7 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
     {
         TB_Sensor_Flag = 1;
 
-        for(i=0;i<8;i++)
+        for(i=0;i<5;i++)
         {
             if(TempVal[i] < -50)
             {
@@ -1623,302 +1692,7 @@ float PID_Contorller(float kp, float ki, float kd, float targetValue, float read
 }
 
 
-void MessageTx(void)
-{
-    // Verify Request connect (PC 1.2)
-    if(PC_SendMessageFlag && PC_reQuestFlag)
-    {
-        //UCA1IE &= ~UCRXIE;
-        //UCA2IE &= ~UCRXIE;
 
-        fput_data(0xfe);
-
-        fput_data(0xB0);
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0xa5);
-
-        PC_SendMessageFlag = 0;
-
-        //UCA2IE |= UCRXIE;
-        //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-    }
-
-    // Send message about current Temperature and target temperature (PC 1.4 / 2.1 / 3.1)
-    if(PC_SendMessageFlag == 1 && AT_NORMAL_FLAG == 1)
-    {
-
-
-        //UCA1IE &= ~UCRXIE;
-        //UCA3IE &= ~UCRXIE;
-
-        fput_data(0xfe);
-
-        fput_data(0x90);
-
-        fput_data(TempVal[0]);
-        fput_data(TargetTemp[0]);
-
-        fput_data(TempVal[1]);
-        fput_data(TargetTemp[1]);
-
-        fput_data(TempVal[2]);
-        fput_data(TargetTemp[2]);
-
-        fput_data(TempVal[3]);
-        fput_data(TargetTemp[3]);
-
-        fput_data(TempVal[4]);
-        fput_data(TargetTemp[4]);
-
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data( SaveOnOffState );
-
-        fput_data( 0xa5 );
-
-        PC_SendMessageFlag = 0;
-
-        //UCA3IE |= UCRXIE;
-        //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-
-    }
-
-    // Send message about current Temperature in Tuning Start (4.2)
-    if(PC_SendMessageFlag && (AT_START_FLAG))
-    {
-        if( ((AT_currentTemp & (0xFF << 8)) >> 8)  < 0x03 )
-        {
-            //UCA1IE &= ~UCRXIE;
-            //UCA3IE &= ~UCRXIE;                  // prevent to occur overrun (rx)
-
-            fput_data(0xfe);                                            // 1
-
-            fput_data(0x92);                                            // 2
-
-            fput_data( (AT_currentTemp & (0xFF << 8)) >> 8 );            // 3
-            fput_data( (AT_currentTemp & (0xFF << 0)) >> 0 );            // 4
-
-            //fput_data( (AT_curretTemp & (0xFF << 8)) >> 8 );
-            //fput_data( (AT_curretTemp & (0xFF << 0)) >> 0 );
-
-            fput_data(0x00);                                            // 5
-            fput_data(0x00);                                            // 6
-            fput_data(0x00);                                            // 7
-            fput_data(0x00);                                            // 8
-            fput_data(0x00);                                            // 9
-            fput_data(0x00);                                            // 10
-
-            fput_data(0x00);                                            // 11
-            fput_data(0x00);                                            // 12
-            fput_data(0x00);                                            // 13
-            fput_data(0x00);                                            // 14
-            fput_data(0x00);                                            // 15
-
-            fput_data(0x00);                                            // 16
-            fput_data(0x00);                                            // 17
-            fput_data(0x00);                                            // 18
-            fput_data(0x00);                                            // 19
-            fput_data(0x00);                                            // 20
-
-            //fput_data2( SaveOnOffState );
-
-            fput_data(Selected_Channel);                                  // 21
-
-            fput_data( 0xa5 );                                          // 22
-
-            PC_SendMessageFlag = 0;
-
-            //UCA3IE |= UCRXIE;
-            //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-        }
-    }
-
-    // Send message about Tuning Stop (4.5)
-    if(PC_SendMessageFlag && AT_STOP_FLAG)
-    {
-        //UCA1IE &= ~UCRXIE;
-        //UCA3IE &= ~UCRXIE;                  // prevent to occur overrun (rx)
-
-        fput_data(0xfe);                                            // 1
-
-        fput_data(0x91);                                            // 2
-
-        fput_data(0x00);                                            // 3
-        fput_data(0x00);                                            // 4
-
-        //fput_data( (AT_curretTemp & (0xFF << 8)) >> 8 );
-        //fput_data( (AT_curretTemp & (0xFF << 0)) >> 0 );
-
-        fput_data(0x00);                                            // 5
-        fput_data(0x00);                                            // 6
-        fput_data(0x00);                                            // 7
-        fput_data(0x00);                                            // 8
-        fput_data(0x00);                                            // 9
-        fput_data(0x00);                                            // 10
-
-        fput_data(0x00);                                            // 11
-        fput_data(0x00);                                            // 12
-        fput_data(0x00);                                            // 13
-        fput_data(0x00);                                            // 14
-        fput_data(0x00);                                            // 15
-
-        fput_data(0x00);                                            // 16
-        fput_data(0x00);                                            // 17
-        fput_data(0x00);                                            // 18
-        fput_data(0x00);                                            // 19
-        fput_data(0x00);                                            // 20
-
-        //fput_data2( SaveOnOffState );
-
-        fput_data(Selected_Channel);                                  // 21
-
-        fput_data( 0xa5 );                                          // 22
-
-        PC_SendMessageFlag = 0;
-
-        //UCA3IE |= UCRXIE;
-        //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-    }
-}
-
-void MessageTx2(void)
-{
-    // Verify Request connect (DP 1.2)
-    if(DP_SendMessageFlag && (DP_reQuestFlag || rxReFlag))
-    {
-        //UCA1IE &= ~UCRXIE;
-        //UCA3IE &= ~UCRXIE;
-        rxReFlag = 0;
-        fput_data2(0xfb);
-
-        fput_data2(0x80);
-
-        fput_data2(0x00);
-        fput_data2(0x00);
-
-        fput_data2( (targetIntVal_ch1 & (0xFF << 8)) >> 8 );
-        fput_data2( (targetIntVal_ch1 & (0xFF << 0)) >> 0 );
-
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-        fput_data2(0x00);
-
-        fput_data2(0xa5);
-
-        DP_SendMessageFlag = 0;
-
-        //UCA3IE |= UCRXIE;
-        //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-    }
-
-    // Send message about current Temperature and target temperature (DP 2.1 / 3.2)
-    if(DP_SendMessageFlag == 1 && DP_NORMAL_FLAG == 1)
-    {
-
-        if( ((tempIntVal_ch1 & (0xFF << 8)) >> 8)  < 0x03 && ((tempIntVal_ch2 & (0xFF << 8)) >> 8)  < 0x03
-                && ((tempIntVal_ch3 & (0xFF << 8)) >> 8)  < 0x03 && ((tempIntVal_ch4 & (0xFF << 8)) >> 8)  < 0x03
-                && ((targetIntVal_ch1 & (0xFF << 8)) >> 8) < 0x03 && ((targetIntVal_ch2 & (0xFF << 8)) >> 8) < 0x03
-                && ((targetIntVal_ch3 & (0xFF << 8)) >> 8) < 0x03 && ((targetIntVal_ch4 & (0xFF << 8)) >> 8) < 0x03
-        )
-
-        //if(tempIntVal_ch1 < 0x2BC && tempIntVal_ch1 < 0x)
-        {
-            //UCA1IE &= ~UCRXIE;                  // prevent to occur overrun (rx)
-            //UCA3IE &= ~UCRXIE;
-
-            fput_data2(0xfb);
-
-            fput_data2(0xA0);
-
-            fput_data2( (tempIntVal_ch1 & (0xFF << 8)) >> 8 );
-            fput_data2( (tempIntVal_ch1 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (targetIntVal_ch1 & (0xFF << 8)) >> 8 );
-            fput_data2( (targetIntVal_ch1 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (tempIntVal_ch2 & (0xFF << 8)) >> 8 );
-            fput_data2( (tempIntVal_ch2 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (targetIntVal_ch2 & (0xFF << 8)) >> 8 );
-            fput_data2( (targetIntVal_ch2 & (0xFF << 0)) >> 0 );
-            //fput_data2( (targetIntVal_ch2 & (0xFF << 8)) >> 8 );
-            //fput_data2( (targetIntVal_ch2 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (tempIntVal_ch3 & (0xFF << 8)) >> 8 );
-            fput_data2( (tempIntVal_ch3 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (targetIntVal_ch3 & (0xFF << 8)) >> 8 );
-            fput_data2( (targetIntVal_ch3 & (0xFF << 0)) >> 0 );
-            //fput_data2( (targetIntVal_ch3 & (0xFF << 8)) >> 8 );
-            //fput_data2( (targetIntVal_ch3 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (tempIntVal_ch4 & (0xFF << 8)) >> 8 );
-            fput_data2( (tempIntVal_ch4 & (0xFF << 0)) >> 0 );
-
-            fput_data2( (targetIntVal_ch4 & (0xFF << 8)) >> 8 );
-            fput_data2( (targetIntVal_ch4 & (0xFF << 0)) >> 0 );
-            //fput_data2( (targetIntVal_ch4 & (0xFF << 8)) >> 8 );
-            //fput_data2( (targetIntVal_ch4 & (0xFF << 0)) >> 0 );
-
-            //fput_data2( (tempIntVal_i2c & (0xFF << 8)) >> 8 );
-            //fput_data2( (tempIntVal_i2c & (0xFF << 0)) >> 0 );
-
-            fput_data2( SaveOnOffState );
-
-            fput_data2( 0xa5 );
-
-            DP_SendMessageFlag = 0;
-
-            //UCA3IE |= UCRXIE;
-            //UCA1IE |= UCRXIE;                  // prevent to occur overrun (rx)
-        }
-    }
-}
 
 
 void FRAMWrite(unsigned char *inputData)
@@ -1934,118 +1708,7 @@ void FRAMWrite(unsigned char *inputData)
 }
 
 
-void Tx_PID_Tuning(unsigned char commandTx, unsigned char SelectedChannel)
-{
-    unsigned char tIndex = 0;
-    if(commandTx == 1)
-    {
-        // save to return one cycle
 
-        fput_data(0xfe);
-
-        fput_data(0x90);
-
-        fput_data( P_CastingBuffer[SelectedChannel][3] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][2] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][1] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][0] );     // P-Gain
-
-        fput_data( I_CastingBuffer[SelectedChannel][3] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][2] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][1] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][0] );     // I-Gain
-
-        fput_data( D_CastingBuffer[SelectedChannel][3] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][2] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][1] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][0] );     // D-Gain
-
-        fput_data(SelectedChannel);     // Channel      0~3 (4-channels)
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x07);        // block command
-
-        fput_data(0xa5);
-    }
-    if(commandTx == 2)
-    {
-        // save to return four cycle (all channels)
-        for(tIndex = 0; tIndex < 4; tIndex++)
-        {
-            fput_data(0xfe);
-
-            fput_data(0x90);
-
-            fput_data( P_CastingBuffer[tIndex][3] );     // P-Gain
-            fput_data( P_CastingBuffer[tIndex][2] );     // P-Gain
-            fput_data( P_CastingBuffer[tIndex][1] );     // P-Gain
-            fput_data( P_CastingBuffer[tIndex][0] );     // P-Gain
-
-            fput_data( I_CastingBuffer[tIndex][3] );     // I-Gain
-            fput_data( I_CastingBuffer[tIndex][2] );     // I-Gain
-            fput_data( I_CastingBuffer[tIndex][1] );     // I-Gain
-            fput_data( I_CastingBuffer[tIndex][0] );     // I-Gain
-
-            fput_data( D_CastingBuffer[tIndex][3] );     // D-Gain
-            fput_data( D_CastingBuffer[tIndex][2] );     // D-Gain
-            fput_data( D_CastingBuffer[tIndex][1] );     // D-Gain
-            fput_data( D_CastingBuffer[tIndex][0] );     // D-Gain
-
-            fput_data(tIndex);     // Channel      0~3 (4-channels)
-
-            fput_data(0x00);
-            fput_data(0x00);
-            fput_data(0x00);
-            fput_data(0x00);
-            fput_data(0x00);
-
-            fput_data(0x07);        // block command
-
-            fput_data(0xa5);
-        }
-    }
-    if(commandTx == 3)
-    {
-        // save to return one cycle about SelectedChannel
-
-        fput_data(0xfe);
-
-        fput_data(0x90);
-
-        fput_data( P_CastingBuffer[SelectedChannel][3] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][2] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][1] );     // P-Gain
-        fput_data( P_CastingBuffer[SelectedChannel][0] );     // P-Gain
-
-        fput_data( I_CastingBuffer[SelectedChannel][3] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][2] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][1] );     // I-Gain
-        fput_data( I_CastingBuffer[SelectedChannel][0] );     // I-Gain
-
-        fput_data( D_CastingBuffer[SelectedChannel][3] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][2] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][1] );     // D-Gain
-        fput_data( D_CastingBuffer[SelectedChannel][0] );     // D-Gain
-
-        fput_data(SelectedChannel);     // Channel      0~3 (4-channels)
-
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-        fput_data(0x00);
-
-        fput_data(0x07);        // block command
-
-        fput_data(0xa5);
-    }
-
-}
 
 void FloatToByte(void)
 {
@@ -2201,41 +1864,6 @@ void ByteToFloat(void)
         Kd_Value[fIndex] = Kd_Temp[fIndex];
     }*/
 
-}
-
-float CalcTemp(int rawTemp)                    // �µ����
-{
-  float retTemp;
-  retTemp = ((float)rawTemp)*0.02;
-  retTemp -= 273.15;
-  return retTemp;
-}
-
-uint8_t GetObject(void)                   // ���µ� �б�
-{
-  int16_t rawObj;
-  if(PEC_ture == 1)
-  {
-    if (rawObj & 0x8000)                         // �ֻ��� ��Ʈ�� 1 �̸� ����
-    {
-      return 0;
-    }
-    result_object = _rawObject;
-    return 1;
-  }
-}
-
-uint8_t CalPEC(uint8_t *crc, uint8_t nBytes)  // PEC ����
-{
-  uint8_t data, count;
-  uint16_t remainder = 0;
-
-  for(count=0; count<nBytes; ++count)
-  {
-     data = *(crc++) ^ remainder;
-     remainder = crc8_table[data] ^ (remainder >> 8);
-  }
-  return (uint8_t)remainder;
 }
 
 

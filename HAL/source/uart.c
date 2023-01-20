@@ -12,10 +12,10 @@
 #include "HAL/include/uart.h"
 
 unsigned int BufferCount;
-int BufferCount2;
+unsigned int BufferCountFromSlave;
 int ShiftCount;
 unsigned char ucRxBuffer[20];
-unsigned char BufferChecking2[11];
+unsigned char ucRxBufferFromSlave[20];
 unsigned char OverrunChecking;
 unsigned int ByteStatus;
 //volatile unsigned char errData[11];
@@ -180,8 +180,6 @@ void __attribute__ ((interrupt(EUSCI_A2_VECTOR))) USCI_A2_ISR (void)
 
                 ucRxBuffer[BufferCount++] = RxData;
 
-
-
                 if(RxData == 0xa5 && BufferCount >= 12)
                 {
                     int i=0;
@@ -238,86 +236,27 @@ void __attribute__ ((interrupt(EUSCI_A1_VECTOR))) USCI_A1_ISR (void)
                       |  UCRXIE0    // Data ready to transmit interrupt enable
                       |  UCNACKIE);  // NACK interrupt enable
 
-                RxData2 = UCA1RXBUF;
-                //ByteStatus &= (UCOE);
-                //errData[Index] = ByteStatus;
-                //Index++;
-                //if(Index == 11)
-                //    Index = 0;
-                //if(q.state != 1)
-                //{
-                BufferChecking2[BufferCount2++] = RxData2;
+                RxDataFromSlave = UCA1RXBUF;
 
-                /*
-                if(RxData == 0xa5)
+                ucRxBufferFromSlave[BufferCountFromSlave++] = RxDataFromSlave;
+
+
+                if(RxDataFromSlave == 0xa5 && BufferCountFromSlave >= 14)
                 {
-                    if(BufferCount >= 11)
+                    int i=0;
+                    Data temp;
+
+                    if(ucRxBufferFromSlave[BufferCountFromSlave-14] == 0xfd && ucRxBufferFromSlave[BufferCountFromSlave-1] == 0xa5)
                     {
-                        BufferCount = 0;
-                        if(BufferChecking[0] == 0xfd && BufferChecking[10] == 0xa5)
+                        temp.mode = ucRxBufferFromSlave[BufferCountFromSlave-13];
+                        for(i=0;i<11;i++)
                         {
-                            //if(BufferChecking[1] <= 3 && BufferChecking[3] <= 3 && BufferChecking[5] <= 3 && BufferChecking[7] <= 3)
-                           // {
-                                // error
-                                int i = 0;
-                                for(i = 0; i < 11; i++)
-                                {
-                                    Enqueue(&q, BufferChecking[i]);     // enqueue start
-                                }
-
-                            //}
-
-                            //if( (sizeof(q.queArr)/sizeof(unsigned char)) < 11)
-                            //{
-                            //    QueueInit(&q);
-                            //}
-
-
+                            temp.data[i] = ucRxBufferFromSlave[i+(BufferCountFromSlave-12)];
                         }
-                        else
-                        {
-
-                            //for(ShiftCount = 0; ShiftCount< (sizeof(BufferChecking)/sizeof(unsigned char)); ShiftCount++)
-                            //{
-                            //    BufferChecking[ShiftCount] = BufferChecking[ShiftCount+1];
-                            //}
-                            //BufferChecking[sizeof(BufferChecking)/sizeof(unsigned char)] = 0;
-
-                        }
+                        Enqueue(&rxSlaveDataQueue, temp);
                     }
-                    else
-                    {
-                        //int i = 0;
-                        //for(i = 0; i < (sizeof(BufferChecking) / sizeof(unsigned char)); i++)
-                        //{
-                        //    BufferChecking[i] = 0;
-                        //}
-
-                    }
+                    BufferCountFromSlave = 0;
                 }
-                */
-
-
-                //}
-
-            //rxFlag = 1;
-            /*
-            if(data != 0xa5)
-            {
-                pData[a] = data;
-                if(pData[0] == 0xfd)
-                {
-                    a++;
-                }
-            }
-            else{
-                pData[a] = data;
-                //strcpy(newCommand, pData);
-                _commandZone(pData);
-                a = 0;
-                //complete_Flag = 1;
-            }
-             */
 
                 UCB2IE   |= (UCTXIE0    // Data received interrupt enable
                           |  UCRXIE0    // Data ready to transmit interrupt enable

@@ -14,10 +14,11 @@
 #include <string.h>
 
 unsigned char RxData;
-unsigned char RxData2;      // Uart2
+unsigned char RxDataFromSlave;      // Uart2
 
 
 Queue rxPcDataQueue;
+Queue rxSlaveDataQueue;
 
 void Init_UART(void);
 void Init_UART2(void);

@@ -14,7 +14,7 @@
 typedef struct rxData
 {
     char mode;
-    char data[9];
+    char data[11];
 } rxDataPc;
 
 #define QUE_LEN 50                // Packet byte (data length)

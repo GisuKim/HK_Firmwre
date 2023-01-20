@@ -1,6 +1,8 @@
 "./main.obj"
 "./Driver/source/LNJT103F_NTC.obj"
+"./Driver/source/TBP-H08_Themo.obj"
 "./Driver/source/pc_protocol.obj"
+"./Driver/source/slave_protocol.obj"
 "./HAL/source/adc.obj"
 "./HAL/source/i2c.obj"
 "./HAL/source/pwm.obj"
