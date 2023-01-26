@@ -9,27 +9,27 @@
 
 void ConnectMsgSendToSlave(void)
 {
-    fput_data2(0xfd);
-    fput_data2(0xB0);
+    fput_data2(0xfd);       //0 STX
+    fput_data2(0xb0);       //1 Mode
 
-    fput_data2(0x00);
-    fput_data2(0x00);
+    fput_data2(0x00);       //2
+    fput_data2(0x00);       //3
 
-    fput_data2(0x00);
-    fput_data2(0x00);
+    fput_data2(0x00);       //4
+    fput_data2(0x00);       //5
 
-    fput_data2(0x00);
-    fput_data2(0x00);
+    fput_data2(0x00);       //6
+    fput_data2(0x00);       //7
 
-    fput_data2(0x00);
-    fput_data2(0x00);
+    fput_data2(0x00);       //8
+    fput_data2(0x00);       //9
 
-    fput_data2(0x00);
-    fput_data2(0x00);
+    fput_data2(0x00);       //10
+    fput_data2(0x00);       //11
 
-    fput_data2(0x00);
+    fput_data2(0x00);       //12
 
-    fput_data2(0xa5);
+    fput_data2(0xa5);       //13 ETX
 }
 
 void ConnectAckMsgSendToSlave(void)
@@ -70,16 +70,15 @@ void sendCommandToSlave(Data data)
     fput_data2(data.data[3]);   //5
 
     fput_data2(data.data[4]);   //6
-    fput_data2(data.data[5]);   //7
+    fput_data2(0x00);   //7
 
-    fput_data2(data.data[6]);   //8
-    fput_data2(data.data[7]);   //9
+    fput_data2(0x00);   //8
+    fput_data2(0x00);   //9
 
     fput_data2(data.data[8]);   //10
-    fput_data2(data.data[9]);   //11
+    fput_data2(0x00);   //11
 
-    fput_data2(data.data[10]);   //12
-
+    fput_data2(0x00);   //12
     fput_data2(0xa5);   //13 ETX
 
 }
@@ -126,10 +125,10 @@ void MessageTxMaster(void)
     {
 
         fput_data2(0xfd);                    //0 STX
-        fput_data2(0xa1);                    //1 MODE
+        fput_data2(0xa1);                    //1
 
         fput_data2(TempVal[0]);              //2
-        fput_data2(TargetTemp[0]);           //3
+        fput_data2(TargetTemp[0]);           //3 MODEargetTemp[1]);           //5
 
         fput_data2(TempVal[1]);              //4
         fput_data2(TargetTemp[1]);           //5
@@ -156,6 +155,7 @@ void MessageTxMaster(void)
 
 void MessageTxSlave(void)
 {
+    int i = 0;
     // Verify Request connect (DP 1.2)
     if(DP_SendMessageFlag && (DP_reQuestFlag || rxReFlag))
     {
@@ -241,6 +241,11 @@ void MessageTxSlave(void)
             //fput_data2( (tempIntVal_i2c & (0xFF << 8)) >> 8 );
             //fput_data2( (tempIntVal_i2c & (0xFF << 0)) >> 0 );
 
+//            (SaveMasterOnOffState >> 7) | PID_Flag[1];
+//            PID_Flag[1] = (SaveMasterOnOffState >> 6) & 0x01;
+//            PID_Flag[2] = (SaveMasterOnOffState >> 5) & 0x01;
+//            PID_Flag[3] = (SaveMasterOnOffState >> 4) & 0x01;
+//            PID_Flag[4] = (SaveMasterOnOffState >> 3) & 0x01;
             fput_data2( SaveMasterOnOffState );
 
             fput_data2( 0xa5 );

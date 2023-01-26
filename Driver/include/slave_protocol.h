@@ -31,7 +31,6 @@ extern unsigned short int targetIntVal_ch4;
 
 extern signed char TempVal[10];
 extern char TargetTemp[10];
-
 void ConnectMsgSendToSlave(void);
 void ConnectAckMsgSendToSlave(void);
 void MessageTxMaster(void);

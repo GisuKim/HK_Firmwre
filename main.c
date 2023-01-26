@@ -76,9 +76,9 @@
 
 
 
-float Kp_Value[5] = {0.6, 0.6, 1.65, 1.75, 1.75};
-float Ki_Value[5] = {0.1, 0.1, 0.55, 0.5, 0.5};
-float Kd_Value[5] = {0.08, 0.08, 0.2, 0.45, 0.2};
+float Kp_Value[5] = {2, 2, 2, 2, 2};
+float Ki_Value[5] = {0.5, 0.5, 0.5, 0.5, 0.5};
+float Kd_Value[5] = {0.2, 0.2, 0.2, 0.2, 0.2};
 
 
 // 현재 PID는 근사치에 가까움 PID 설정셋팅 그만
@@ -887,7 +887,7 @@ void processPcCommand(Data command)
         PID_Flag[4] = (SaveMasterOnOffState >> 3) & 0x01;
         ADC_CH1_Controller = 1;
 //        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
-        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
+//        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
         PC_SendMessageFlag = 1;
         MessageTx();    // Feedback Message
         break;
@@ -919,17 +919,25 @@ void processMasterCommand(Data command) //Maseter <--- Slave
         TempVal[8] = command.data[6];
         TempVal[9] = command.data[8];
 
-        TargetTemp[5] = ConfigTemp[1];
-        TargetTemp[6] = ConfigTemp[3];
-        TargetTemp[7] = ConfigTemp[5];
-        TargetTemp[8] = ConfigTemp[7];
+        ConfigTemp[5] = command.data[1];
+        ConfigTemp[6] = command.data[3];
+        ConfigTemp[7] = command.data[5];
+        ConfigTemp[8] = command.data[7];
+        ConfigTemp[9] = command.data[9];
+
+        TargetTemp[5] = ConfigTemp[5];
+        TargetTemp[6] = ConfigTemp[6];
+        TargetTemp[7] = ConfigTemp[7];
+        TargetTemp[8] = ConfigTemp[8];
         TargetTemp[9] = ConfigTemp[9];
 
+        PC_SendMessageFlag = 1;
+        MessageTx();    // Feedback Message
         break;
     case 0xb3:  //controll msg
         // Configuration target Temperature (PC 2.2)
 
-        SaveMasterOnOffState = command.data[8];
+        SaveMasterOnOffState = command.data[10];
         //set heater target
         ConfigTemp[5] = command.data[0];
         ConfigTemp[6] = command.data[1];
@@ -937,11 +945,11 @@ void processMasterCommand(Data command) //Maseter <--- Slave
         ConfigTemp[8] = command.data[3];
         ConfigTemp[9] = command.data[4];
 
-        TargetTemp[5] = ConfigTemp[0];
-        TargetTemp[6] = ConfigTemp[1];
-        TargetTemp[7] = ConfigTemp[2];
-        TargetTemp[8] = ConfigTemp[3];
-        TargetTemp[9] = ConfigTemp[4];
+        TargetTemp[5] = ConfigTemp[5];
+        TargetTemp[6] = ConfigTemp[6];
+        TargetTemp[7] = ConfigTemp[7];
+        TargetTemp[8] = ConfigTemp[8];
+        TargetTemp[9] = ConfigTemp[9];
 
         // Heater On/Off
         PID_Flag[5] = (SaveSlaveOnOffState >> 7) & 0x01;
@@ -951,7 +959,7 @@ void processMasterCommand(Data command) //Maseter <--- Slave
         PID_Flag[9] = (SaveSlaveOnOffState >> 3) & 0x01;
         ADC_CH1_Controller = 1;
 //        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
-        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
+//        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
         PC_SendMessageFlag = 1;
         MessageTx();    // Feedback Message
         break;
@@ -978,7 +986,7 @@ void processSlaveCommand(Data command) //Maseter ---> Slave
     case 0xb3:  //controll msg
         // Configuration target Temperature (PC 2.2)
 
-        SaveMasterOnOffState = command.data[8];
+        SaveMasterOnOffState = command.data[8]; //Slave 이지만 제어는 Master
         //set heater target
         ConfigTemp[0] = command.data[0];
         ConfigTemp[1] = command.data[1];
@@ -1000,11 +1008,10 @@ void processSlaveCommand(Data command) //Maseter ---> Slave
         PID_Flag[4] = (SaveMasterOnOffState >> 3) & 0x01;
         ADC_CH1_Controller = 1;
 //        ADC_CH1_Controller =! (SaveOnOffState >> 2) & 0x01;
-        I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
-        PC_SendMessageFlag = 1;
-        MessageTx();    // Feedback Message
+        //I2C_Sensor = (SaveMasterOnOffState >> 2) & 0x01;
+        DP_SendMessageFlag = 1;
+        MessageTxMaster();
         break;
-
     }
 
 }
@@ -1535,6 +1542,29 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer0_A0_ISR (void)
 
         PC_SendMessageFlag = 1;
         DP_SendMessageFlag = 1;
+
+        SaveMasterOnOffState = 0x00;
+        if(PID_Flag[0] == 1)
+        {
+            SaveMasterOnOffState |= 0x80;
+        }
+        if(PID_Flag[1] == 1)
+        {
+            SaveMasterOnOffState |= 0x40;
+        }
+        if(PID_Flag[2] == 1)
+        {
+            SaveMasterOnOffState |= 0x20;
+        }
+        if(PID_Flag[3] == 1)
+        {
+            SaveMasterOnOffState |= 0x10;
+        }
+        if(PID_Flag[4] == 1)
+        {
+            SaveMasterOnOffState |= 0x08;
+        }
+
 
         if(PID_Flag[0])
         {
